@@ -1,10 +1,11 @@
+using Fusion;
 using UnityEngine;
 
-/// <summary>Automatic pickup trigger attached at runtime to the Document prefab instance.</summary>
-public sealed class OfficeDocumentPickup : MonoBehaviour
+/// <summary>Networked document pickup; only the host can award and despawn it.</summary>
+public sealed class OfficeDocumentPickup : NetworkBehaviour
 {
     private OfficeDocumentSpawner spawner;
-    private bool collected;
+    private int spawnIndex = -1;
 
     private void Awake()
     {
@@ -20,25 +21,26 @@ public sealed class OfficeDocumentPickup : MonoBehaviour
         body.useGravity = false;
     }
 
-    public void Initialize(OfficeDocumentSpawner owner)
+    public void Initialize(OfficeDocumentSpawner owner, int sourceSpawnIndex)
     {
         spawner = owner;
-        collected = false;
+        spawnIndex = sourceSpawnIndex;
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (collected)
+        if (!Object.HasStateAuthority)
             return;
 
-        OfficePlayerMotor player = other.GetComponentInParent<OfficePlayerMotor>();
-        if (player == null || !player.TryCollectDocument())
+        OfficeFusionPlayer player = other.GetComponentInParent<OfficeFusionPlayer>();
+        if (player == null || !player.TryCollectDocumentAuthority())
             return;
 
-        collected = true;
         if (spawner != null)
             spawner.OnDocumentCollected(this);
         else
-            Destroy(gameObject);
+            Runner.Despawn(Object);
     }
+
+    public int SpawnIndex => spawnIndex;
 }

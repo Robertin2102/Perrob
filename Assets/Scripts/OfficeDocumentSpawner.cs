@@ -1,9 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
+using Fusion;
 using UnityEngine;
 
 /// <summary>Maintains a rotating set of pickups on configured office spawn points.</summary>
-public sealed class OfficeDocumentSpawner : MonoBehaviour
+public sealed class OfficeDocumentSpawner : NetworkBehaviour
 {
     [Header("Prefab and points")]
     [SerializeField] private GameObject documentPrefab;
@@ -28,9 +29,12 @@ public sealed class OfficeDocumentSpawner : MonoBehaviour
     }
 #endif
 
-    private void Start()
+    public override void Spawned()
     {
         CacheValidSpawnPoints();
+
+        if (!Object.HasStateAuthority)
+            return;
 
         if (documentPrefab == null)
         {
@@ -51,36 +55,32 @@ public sealed class OfficeDocumentSpawner : MonoBehaviour
 
     public void OnDocumentCollected(OfficeDocumentPickup pickup)
     {
-        if (pickup == null)
+        if (!Object.HasStateAuthority || pickup == null)
             return;
 
         if (!pickupSpawnIndices.TryGetValue(pickup, out int oldSpawnIndex))
         {
             // Dropped cargo is a loose pickup and does not occupy/replace a map spawn slot.
-            Destroy(pickup.gameObject);
+            Runner.Despawn(pickup.Object);
             return;
         }
 
         pickupSpawnIndices.Remove(pickup);
         occupiedSpawnIndices.Remove(oldSpawnIndex);
-        Destroy(pickup.gameObject);
+        Runner.Despawn(pickup.Object);
         StartCoroutine(RespawnAtDifferentPoint(oldSpawnIndex));
     }
 
     public void SpawnDroppedDocuments(int count, Vector3 aroundPosition)
     {
-        if (documentPrefab == null || count <= 0)
+        if (!Object.HasStateAuthority || documentPrefab == null || count <= 0)
             return;
 
         for (int i = 0; i < count; i++)
         {
             float angle = (Mathf.PI * 2f * i / count) + Random.Range(-0.2f, 0.2f);
             Vector3 offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 0.7f;
-            GameObject instance = Instantiate(documentPrefab, aroundPosition + offset + spawnOffset, Quaternion.identity);
-            OfficeDocumentPickup pickup = instance.GetComponent<OfficeDocumentPickup>();
-            if (pickup == null)
-                pickup = instance.AddComponent<OfficeDocumentPickup>();
-            pickup.Initialize(this);
+            SpawnDocument(aroundPosition + offset + spawnOffset, Quaternion.identity, -1);
         }
     }
 
@@ -126,14 +126,28 @@ public sealed class OfficeDocumentSpawner : MonoBehaviour
 
         int spawnIndex = candidates[Random.Range(0, candidates.Count)];
         Transform point = validSpawnPoints[spawnIndex];
-        GameObject instance = Instantiate(documentPrefab, point.position + spawnOffset, point.rotation);
+        SpawnDocument(point.position + spawnOffset, point.rotation, spawnIndex);
+    }
 
-        OfficeDocumentPickup pickup = instance.GetComponent<OfficeDocumentPickup>();
-        if (pickup == null)
-            pickup = instance.AddComponent<OfficeDocumentPickup>();
-        pickup.Initialize(this);
+    private void SpawnDocument(Vector3 position, Quaternion rotation, int spawnIndex)
+    {
+        if (!Object || !Object.HasStateAuthority || documentPrefab == null || Runner == null)
+            return;
 
-        occupiedSpawnIndices.Add(spawnIndex);
-        pickupSpawnIndices.Add(pickup, spawnIndex);
+        NetworkObject prefab = documentPrefab.GetComponent<NetworkObject>();
+        if (prefab == null)
+        {
+            Debug.LogError("Document.prefab necesita un NetworkObject en la raíz.", documentPrefab);
+            return;
+        }
+
+        NetworkObject spawnedObject = Runner.Spawn(prefab, position, rotation, PlayerRef.None,
+            (_, networkObject) => networkObject.GetComponent<OfficeDocumentPickup>().Initialize(this, spawnIndex));
+        OfficeDocumentPickup pickup = spawnedObject.GetComponent<OfficeDocumentPickup>();
+        if (spawnIndex >= 0)
+        {
+            occupiedSpawnIndices.Add(spawnIndex);
+            pickupSpawnIndices.Add(pickup, spawnIndex);
+        }
     }
 }

@@ -14730,6 +14730,8 @@ GameObject:
   - component: {fileID: 182104670751013879}
   - component: {fileID: 1692101035389795633}
   - component: {fileID: 572145626024471136}
+  - component: {fileID: 5167366463003279338}
+  - component: {fileID: 4541968876171880274}
   m_Layer: 1
   m_Name: Document
   m_TagString: Untagged
@@ -19586,3 +19588,35 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.46475014
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &5167366463003279338
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7076716323374762365}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 4181914579
+  SendPriority: 1
+  EnableInterpolation: 1
+  Flags: 262146
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 4541968876171880274}
+  ForceRemoteRenderTimeframe: 0
+--- !u!114 &4541968876171880274
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7076716323374762365}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8328da013d5492a8d9ef172a028ac5b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OfficeDocumentPickup

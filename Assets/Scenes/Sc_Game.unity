@@ -4319,6 +4319,7 @@ GameObject:
   m_Component:
   - component: {fileID: 449681707}
   - component: {fileID: 449681706}
+  - component: {fileID: 449681708}
   m_Layer: 0
   m_Name: OfficeDocumentSpawner
   m_TagString: Untagged
@@ -4368,6 +4369,26 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &449681708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 449681705}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 270224043
+  SendPriority: 1
+  EnableInterpolation: 1
+  Flags: 262146
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 449681706}
+  ForceRemoteRenderTimeframe: 0
 --- !u!1 &453457270
 GameObject:
   m_ObjectHideFlags: 0
@@ -5311,6 +5332,7 @@ GameObject:
   - component: {fileID: 580679126}
   - component: {fileID: 580679125}
   - component: {fileID: 580679124}
+  - component: {fileID: 580679128}
   m_Layer: 0
   m_Name: Finish
   m_TagString: Untagged
@@ -10241,6 +10263,26 @@ ParticleSystem:
         m_PostInfinity: 2
         m_RotationOrder: 4
     vectorLabel1_3: W
+--- !u!114 &580679128
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 580679122}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 870713332
+  SendPriority: 1
+  EnableInterpolation: 1
+  Flags: 262146
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 580679124}
+  ForceRemoteRenderTimeframe: 0
 --- !u!4 &586732894 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 400000, guid: cfd607baed7447f4cba3082a6ca8b626, type: 3}
@@ -15409,7 +15451,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
+  m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
   m_SortingOrder: 20
@@ -28218,6 +28260,7 @@ GameObject:
   - component: {fileID: 363856758489270823}
   - component: {fileID: 561832034789406308}
   - component: {fileID: 8958000000000000021}
+  - component: {fileID: 8958000000000000022}
   m_Layer: 0
   m_Name: Finish
   m_TagString: Untagged
@@ -28260,6 +28303,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OfficeDeliveryZone
   ownerPlayerId: 0
   requiredDeliverySeconds: 2
+--- !u!114 &8958000000000000022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 561832034789406307}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 2179633560
+  SendPriority: 1
+  EnableInterpolation: 1
+  Flags: 262146
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 8958000000000000021}
+  ForceRemoteRenderTimeframe: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

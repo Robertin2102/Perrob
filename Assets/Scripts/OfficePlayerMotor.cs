@@ -59,8 +59,11 @@ public sealed class OfficePlayerMotor : MonoBehaviour
     public int PlayerId => playerId;
     public int CarriedDocuments => carriedDocuments;
     public int DeliveredDocuments => deliveredDocuments;
+    public int MaximumDocuments => maximumDocuments;
     public float Energy => currentEnergy;
     public float MaximumEnergy => maximumEnergy;
+    public float HitStunSeconds => hitStunSeconds;
+    public float RespawnDelay => respawnDelay;
     public float CurrentMoveSpeed => baseMoveSpeed * (1f - CurrentLoadPenalty);
     public float CurrentLoadPenalty => Mathf.Min(carriedDocuments * penaltyPerDocument, maximumLoadPenalty);
     public bool IsStunned => isKnockedOut || stunTimer > 0f;
@@ -132,6 +135,37 @@ public sealed class OfficePlayerMotor : MonoBehaviour
         networkSimulation = enabled;
     }
 
+    /// <summary>Applies the host-owned state received by the network player to this visual motor.</summary>
+    public void ApplyNetworkState(int carried, int delivered, float energy, float maxEnergy,
+        bool knockedOut, float stunSeconds)
+    {
+        bool wasStunned = IsStunned;
+        bool carryChanged = carriedDocuments != carried;
+        bool scoreChanged = deliveredDocuments != delivered;
+        bool energyChanged = !Mathf.Approximately(currentEnergy, energy) ||
+                             !Mathf.Approximately(maximumEnergy, maxEnergy);
+
+        carriedDocuments = Mathf.Clamp(carried, 0, maximumDocuments);
+        deliveredDocuments = Mathf.Max(0, delivered);
+        currentEnergy = Mathf.Clamp(energy, 0f, maxEnergy);
+        maximumEnergy = Mathf.Max(1f, maxEnergy);
+        isKnockedOut = knockedOut;
+        stunTimer = Mathf.Max(0f, stunSeconds);
+
+        if (carryChanged) CarriedDocumentsChanged?.Invoke(carriedDocuments);
+        if (scoreChanged) DeliveredDocumentsChanged?.Invoke(deliveredDocuments);
+        if (energyChanged) EnergyChanged?.Invoke(currentEnergy, maximumEnergy);
+
+        if (!wasStunned && IsStunned)
+            PlayAnimation(hitState);
+    }
+
+    public void SetNetworkRemoteLocomotion(bool moving)
+    {
+        if (!IsStunned)
+            UpdateLocomotionAnimation(moving);
+    }
+
     public void SetPlayerId(int value)
     {
         playerId = Mathf.Max(0, value);
@@ -170,9 +204,6 @@ public sealed class OfficePlayerMotor : MonoBehaviour
                 Respawn();
             return;
         }
-
-        if (stunTimer > 0f)
-            stunTimer = Mathf.Max(0f, stunTimer - deltaTime);
 
         if (hasAimPoint)
         {

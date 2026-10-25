@@ -1244,7 +1244,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 720a7a4d12f733d4c902f75fb4824f7d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OfficeFusionRoomController
-  playerPrefab: {fileID: 0}
+  playerPrefab: {fileID: 6271127455050399470, guid: 99ff3af2259fea945be2c6c0fc05d998, type: 3}
   lobbyStatePrefab: {fileID: 3057244410168871223, guid: 7888f4644ac4c0b47aff7617acc1d49d, type: 3}
   playerOneSpawn: {fileID: 0}
   playerTwoSpawn: {fileID: 0}

@@ -5863,7 +5863,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b40aa4976e644f640b69afcf5a50b001, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OfficeFusionPlayer
+  paperBallPrefab: {fileID: 7184211636303692202, guid: 799b7487486379f4b8c1cc5230eb539c, type: 3}
   _PlayerSlot: 0
+  _CarriedDocuments: 0
+  _DeliveredDocuments: 0
+  _Energy: 0
+  _KnockedOut:
+    RawValue: 0
+  _RespawnPosition: {x: 0, y: 0, z: 0}
+  _RespawnRotation: {x: 0, y: 0, z: 0, w: 0}
+  _DeliveryProgress: 0
 --- !u!1 &7664474892836456258
 GameObject:
   m_ObjectHideFlags: 0

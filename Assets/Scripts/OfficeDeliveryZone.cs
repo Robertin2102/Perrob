@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
+using Fusion;
 using UnityEngine;
 
 /// <summary>Converts carried documents into score after the owner holds this zone.</summary>
 [RequireComponent(typeof(BoxCollider))]
-public sealed class OfficeDeliveryZone : MonoBehaviour
+public sealed class OfficeDeliveryZone : NetworkBehaviour
 {
     [SerializeField, Min(0)] private int ownerPlayerId;
     [SerializeField, Min(0.1f)] private float requiredDeliverySeconds = 2f;
@@ -35,13 +36,19 @@ public sealed class OfficeDeliveryZone : MonoBehaviour
 
     private void OnTriggerStay(Collider other)
     {
-        OfficePlayerMotor player = TryTrackPlayer(other);
+        if (!Object.HasStateAuthority)
+            return;
+
+        OfficeFusionPlayer networkPlayer = TryTrackPlayer(other);
+        if (networkPlayer == null)
+            return;
+        OfficePlayerMotor player = networkPlayer.Motor;
         if (player == null)
             return;
 
-        if (player.CarriedDocuments <= 0)
+        if (networkPlayer.CarriedDocuments <= 0)
         {
-            SetProgress(player, 0f);
+            SetProgress(networkPlayer, 0f);
             return;
         }
 
@@ -49,26 +56,32 @@ public sealed class OfficeDeliveryZone : MonoBehaviour
         float duration = Mathf.Max(0.1f, requiredDeliverySeconds);
         if (progress >= duration)
         {
-            int delivered = player.DropCarriedDocuments();
-            player.RecordDelivery(delivered);
-            SetProgress(player, 0f);
+            int delivered = networkPlayer.DropCarriedDocumentsAuthority();
+            networkPlayer.DeliverDocumentsAuthority(delivered);
+            SetProgress(networkPlayer, 0f);
             return;
         }
 
-        SetProgress(player, progress);
+        SetProgress(networkPlayer, progress);
     }
 
     private void OnTriggerExit(Collider other)
     {
-        OfficePlayerMotor player = other.GetComponentInParent<OfficePlayerMotor>();
-        if (player != null && deliveryProgress.Remove(player))
+        OfficeFusionPlayer networkPlayer = other.GetComponentInParent<OfficeFusionPlayer>();
+        OfficePlayerMotor player = networkPlayer != null ? networkPlayer.Motor : null;
+        if (Object.HasStateAuthority && player != null && deliveryProgress.Remove(player))
+        {
+            networkPlayer.SetDeliveryProgressAuthority(0f);
             ProgressChanged?.Invoke(player, 0f);
+        }
     }
 
-    private OfficePlayerMotor TryTrackPlayer(Collider other)
+    private OfficeFusionPlayer TryTrackPlayer(Collider other)
     {
-        OfficePlayerMotor player = other.GetComponentInParent<OfficePlayerMotor>();
-        if (player == null || player.PlayerId != ownerPlayerId)
+        OfficeFusionPlayer networkPlayer = other.GetComponentInParent<OfficeFusionPlayer>();
+        OfficePlayerMotor player = networkPlayer != null ? networkPlayer.Motor : null;
+        if (networkPlayer == null || !networkPlayer.Object || player == null ||
+            networkPlayer.PlayerSlot != ownerPlayerId)
             return null;
 
         if (!deliveryProgress.ContainsKey(player))
@@ -77,13 +90,15 @@ public sealed class OfficeDeliveryZone : MonoBehaviour
             ProgressChanged?.Invoke(player, 0f);
         }
 
-        return player;
+        return networkPlayer;
     }
 
-    private void SetProgress(OfficePlayerMotor player, float seconds)
+    private void SetProgress(OfficeFusionPlayer networkPlayer, float seconds)
     {
+        OfficePlayerMotor player = networkPlayer.Motor;
         deliveryProgress[player] = seconds;
         float normalizedProgress = Mathf.Clamp01(seconds / Mathf.Max(0.1f, requiredDeliverySeconds));
+        networkPlayer.SetDeliveryProgressAuthority(normalizedProgress);
         ProgressChanged?.Invoke(player, normalizedProgress);
     }
 }

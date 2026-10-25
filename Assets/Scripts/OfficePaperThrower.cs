@@ -21,6 +21,12 @@ public sealed class OfficePaperThrower : MonoBehaviour
     private float nextThrowTime;
     private bool networkInputMode;
 
+    public Transform ThrowPoint => throwPoint;
+    public float ThrowSpeed => throwSpeed;
+    public float UpwardArc => upwardArc;
+    public float ProjectileLifetime => projectileLifetime;
+    public float DamagePerHit => damagePerHit;
+
 #if UNITY_EDITOR
     private void Reset()
     {
@@ -38,9 +44,6 @@ public sealed class OfficePaperThrower : MonoBehaviour
 
     private void Update()
     {
-        if (networkInputMode)
-            return;
-
         if (readMouseInput && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             RequestThrow();
     }
@@ -53,6 +56,14 @@ public sealed class OfficePaperThrower : MonoBehaviour
     /// <summary>Can be called by a mobile button or a future Photon input adapter.</summary>
     public void RequestThrow()
     {
+        if (networkInputMode)
+        {
+            OfficeFusionPlayer networkPlayer = GetComponent<OfficeFusionPlayer>();
+            if (networkPlayer != null && playerMotor != null && !playerMotor.IsStunned)
+                networkPlayer.RequestNetworkThrow(GetAimDirection());
+            return;
+        }
+
         if (paperBallPrefab == null || Time.time < nextThrowTime ||
             (playerMotor != null && playerMotor.IsStunned))
             return;

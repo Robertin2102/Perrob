@@ -41,6 +41,11 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
     public bool LocalPlayerReady => lobbyState != null && runner != null && lobbyState.IsReady(runner.LocalPlayer);
     public bool BothPlayersReady => lobbyState != null && lobbyState.BothPlayersReady;
     public bool CanStartMatch => IsHost && ConnectedPlayers == 2 && BothPlayersReady;
+    public OfficeFusionPlayer LocalNetworkPlayer => localPlayer;
+    public int LocalPlayerSlot => localPlayer != null ? localPlayer.PlayerSlot : -1;
+    public float PingMilliseconds => HasActiveSession
+        ? (float)(runner.GetPlayerRtt(runner.LocalPlayer) * 1000.0)
+        : 0f;
     public string ReadySummary => lobbyState != null
         ? lobbyState.GetReadySummary()
         : "Esperando a que se conecte el segundo empleado...";
@@ -144,7 +149,7 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
 
         OfficeHudController hud = FindFirstObjectByType<OfficeHudController>();
         if (hud != null)
-            hud.RegisterNetworkPlayer(slot, player.Motor);
+            hud.RegisterNetworkPlayer(slot, player);
 
         if (playersBySlot[0] != null && playersBySlot[1] != null)
             status = "¡Los dos empleados están en la oficina!";
