@@ -12,7 +12,8 @@ public sealed class OfficeFusionLobbyState : NetworkBehaviour
     private PlayerRef queuedHostPlayer;
     private bool queuedHostReady;
 
-    public bool BothPlayersReady => Runner != null && Runner.ActivePlayers.Count() == 2 &&
+    public bool IsReadyStateAvailable => Object != null && Object.IsValid && Runner != null;
+    public bool BothPlayersReady => IsReadyStateAvailable && Runner.ActivePlayers.Count() == 2 &&
                                     PlayerOneReady && PlayerTwoReady;
 
     public override void Spawned()
@@ -40,7 +41,7 @@ public sealed class OfficeFusionLobbyState : NetworkBehaviour
     /// <summary>Updates a ready flag on the Host, including its local player without an RPC.</summary>
     public void SetPlayerReadyAuthority(PlayerRef player, bool isReady)
     {
-        if (!Object.HasStateAuthority || Runner == null)
+        if (!IsReadyStateAvailable || !Object.HasStateAuthority)
             return;
 
         PlayerRef[] activePlayers = Runner.ActivePlayers.OrderBy(player => player.PlayerId).ToArray();
@@ -53,7 +54,7 @@ public sealed class OfficeFusionLobbyState : NetworkBehaviour
 
     public void QueueHostReadyChange(PlayerRef player, bool isReady)
     {
-        if (!Object.HasStateAuthority)
+        if (!IsReadyStateAvailable || !Object.HasStateAuthority)
             return;
 
         queuedHostPlayer = player;
@@ -63,7 +64,7 @@ public sealed class OfficeFusionLobbyState : NetworkBehaviour
 
     public bool IsReady(PlayerRef player)
     {
-        if (Runner == null)
+        if (!IsReadyStateAvailable)
             return false;
 
         PlayerRef[] activePlayers = Runner.ActivePlayers.OrderBy(item => item.PlayerId).ToArray();
@@ -73,6 +74,9 @@ public sealed class OfficeFusionLobbyState : NetworkBehaviour
 
     public string GetReadySummary()
     {
+        if (!IsReadyStateAvailable)
+            return "Preparando el lobby...";
+
         string first = PlayerOneReady ? "LISTO" : "ESPERANDO";
         string second = PlayerTwoReady ? "LISTO" : "ESPERANDO";
         return $"EMPLEADO 01  {first}     ·     EMPLEADO 02  {second}";
@@ -80,7 +84,7 @@ public sealed class OfficeFusionLobbyState : NetworkBehaviour
 
     public void ClearReadyState()
     {
-        if (!Object.HasStateAuthority)
+        if (!IsReadyStateAvailable || !Object.HasStateAuthority)
             return;
 
         PlayerOneReady = false;

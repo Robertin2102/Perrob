@@ -31,8 +31,17 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
     private string roomName;
     private string status = "Crea una sala o únete a una existente.";
     private bool connecting;
-    private OfficeFusionLobbyState CurrentLobbyState =>
-        lobbyState != null ? lobbyState : FindFirstObjectByType<OfficeFusionLobbyState>();
+    private OfficeFusionLobbyState CurrentLobbyState
+    {
+        get
+        {
+            if (lobbyState != null && lobbyState.IsReadyStateAvailable)
+                return lobbyState;
+
+            OfficeFusionLobbyState sceneState = FindFirstObjectByType<OfficeFusionLobbyState>();
+            return sceneState != null && sceneState.IsReadyStateAvailable ? sceneState : null;
+        }
+    }
 
     public bool IsConfigured => playerPrefab != null;
     public string Status => status;
@@ -200,9 +209,25 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
             status = "¡Los dos empleados están en la oficina!";
     }
 
+    public void UnregisterSpawnedPlayer(OfficeFusionPlayer player)
+    {
+        if (player == null)
+            return;
+
+        if (localPlayer == player)
+            localPlayer = null;
+
+        for (int i = 0; i < playersBySlot.Length; i++)
+        {
+            if (playersBySlot[i] == player)
+                playersBySlot[i] = null;
+        }
+    }
+
     public void RegisterLobbyState(OfficeFusionLobbyState state)
     {
-        lobbyState = state;
+        if (state != null && state.IsReadyStateAvailable)
+            lobbyState = state;
     }
 
     public void OnPlayerJoined(NetworkRunner activeRunner, PlayerRef player)
@@ -242,7 +267,7 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
 
     public void OnInput(NetworkRunner activeRunner, NetworkInput input)
     {
-        if (localPlayer != null)
+        if (localPlayer != null && localPlayer.HasLocalInputAuthority)
             input.Set(localPlayer.ReadLocalInput());
     }
 

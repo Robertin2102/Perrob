@@ -13,6 +13,21 @@ public static class OfficeFusionSetupEditor
     private const string DocumentPrefabPath = "Assets/Prefabs/Document.prefab";
     private const string PaperBallPrefabPath = "Assets/Prefabs/PaperBall.prefab";
 
+    [MenuItem("Pelea por el Salario Mínimo/Actualizar prefab Document para Photon")]
+    public static void UpdateDocumentPrefabForNetwork()
+    {
+        NetworkObject documentPrefab = ConfigureNetworkPrefab(DocumentPrefabPath, true, false);
+        if (documentPrefab == null)
+            return;
+
+        AssetDatabase.SaveAssets();
+        NetworkProjectConfigUtilities.RebuildPrefabTable();
+        AssetDatabase.Refresh();
+        EditorUtility.DisplayDialog("Documento preparado",
+            "Document.prefab ahora sincroniza su posición con NetworkTransform y quedó en la tabla de prefabs de Fusion.",
+            "Entendido");
+    }
+
     [MenuItem("Pelea por el Salario Mínimo/Configurar jugador y sala Photon")]
     public static void Setup()
     {
@@ -24,7 +39,7 @@ public static class OfficeFusionSetupEditor
         }
 
         NetworkObject paperBallPrefab = ConfigureNetworkPrefab(PaperBallPrefabPath, true, true);
-        NetworkObject documentPrefab = ConfigureNetworkPrefab(DocumentPrefabPath, false, false);
+        NetworkObject documentPrefab = ConfigureNetworkPrefab(DocumentPrefabPath, true, false);
         NetworkObject playerPrefab = ConfigurePlayerPrefab(paperBallPrefab);
         if (paperBallPrefab == null || documentPrefab == null || playerPrefab == null)
             return;

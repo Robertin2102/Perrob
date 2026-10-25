@@ -100,6 +100,13 @@ public sealed class OfficeDocumentStackVisuals : MonoBehaviour
         }
     }
 
+    public void SetDocumentCount(int count)
+    {
+        count = Mathf.Max(0, count);
+        if (documentVisuals.Count != count)
+            Refresh(count);
+    }
+
     private GameObject CreateDocumentVisual(int index)
     {
         GameObject visual;

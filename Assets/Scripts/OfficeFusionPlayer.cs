@@ -20,7 +20,12 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
 
     private OfficePlayerMotor motor;
     private OfficePaperThrower thrower;
+    private OfficeDocumentStackVisuals stackVisuals;
     private float nextThrowAt;
+    private bool hasInputAuthority;
+    private bool hasStateAuthority;
+    private bool hasLastRenderPosition;
+    private Vector3 lastRenderPosition;
 
     public OfficePlayerMotor Motor => motor;
 
@@ -33,8 +38,13 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
     {
         motor = GetComponent<OfficePlayerMotor>();
         thrower = GetComponent<OfficePaperThrower>();
+        stackVisuals = GetComponentInChildren<OfficeDocumentStackVisuals>(true);
+        hasInputAuthority = Object != null && Object.HasInputAuthority;
+        hasStateAuthority = Object != null && Object.HasStateAuthority;
+        lastRenderPosition = transform.position;
+        hasLastRenderPosition = true;
 
-        if (Object.HasStateAuthority)
+        if (hasStateAuthority)
         {
             Energy = motor != null ? motor.MaximumEnergy : 100f;
             RespawnPosition = transform.position;
@@ -50,7 +60,7 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         if (thrower != null)
             thrower.SetNetworkInputMode(true);
 
-        if (Object.HasInputAuthority)
+        if (hasInputAuthority)
             BindLocalCamera();
 
         RegisterWithRoomController();
@@ -64,6 +74,26 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         float stunSeconds = StunTimer.RemainingTime(Runner) ?? 0f;
         motor.ApplyNetworkState(CarriedDocuments, DeliveredDocuments, Energy,
             motor.MaximumEnergy, KnockedOut, stunSeconds);
+
+        if (stackVisuals != null)
+            stackVisuals.SetDocumentCount(CarriedDocuments);
+
+        if (!hasStateAuthority)
+        {
+            Vector3 currentPosition = transform.position;
+            bool moving = hasLastRenderPosition &&
+                          (currentPosition - lastRenderPosition).sqrMagnitude > 0.000025f;
+            motor.SetNetworkRemoteLocomotion(moving);
+            lastRenderPosition = currentPosition;
+            hasLastRenderPosition = true;
+        }
+    }
+
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        OfficeFusionRoomController room = FindFirstObjectByType<OfficeFusionRoomController>();
+        if (room != null)
+            room.UnregisterSpawnedPlayer(this);
     }
 
     public override void FixedUpdateNetwork()
@@ -89,7 +119,7 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
     public OfficeFusionInput ReadLocalInput()
     {
         OfficeFusionInput input = default;
-        if (Object.HasInputAuthority && motor != null)
+        if (hasInputAuthority && motor != null)
         {
             input.Move = motor.CaptureMoveInput();
             input.HasAimPoint = motor.CaptureAimPoint(out Vector3 point);
@@ -274,6 +304,8 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         if (thrower != null)
             thrower.SetAimCamera(localCamera);
     }
+
+    public bool HasLocalInputAuthority => hasInputAuthority;
 }
 
 /// <summary>Owner input transmitted to the Host for one Fusion tick.</summary>
