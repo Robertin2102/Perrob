@@ -138,9 +138,31 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         float lifetime = thrower != null ? thrower.ProjectileLifetime : 3f;
         PlayerRef owner = Object.InputAuthority;
 
-        Runner.Spawn(paperBallPrefab, origin, Quaternion.LookRotation(direction), owner,
-            (_, spawned) => spawned.GetComponent<PaperBallProjectile>()
-                .Launch(owner, direction * speed + Vector3.up * arc, lifetime, damage));
+        SpawnPaperBallAsync(Runner, owner, direction, origin, speed, arc, lifetime, damage);
+    }
+
+    private async void SpawnPaperBallAsync(NetworkRunner activeRunner, PlayerRef owner,
+        Vector3 direction, Vector3 origin, float speed, float arc, float lifetime, float damage)
+    {
+        try
+        {
+            NetworkSpawnOp spawnOperation = activeRunner.SpawnAsync(
+                paperBallPrefab,
+                origin,
+                Quaternion.LookRotation(direction),
+                owner,
+                (_, spawned) =>
+                {
+                    PaperBallProjectile projectile = spawned.GetComponent<PaperBallProjectile>();
+                    if (projectile != null)
+                        projectile.Launch(owner, direction * speed + Vector3.up * arc, lifetime, damage);
+                });
+            await spawnOperation;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning($"No se pudo crear la bola de papel: {exception.Message}", this);
+        }
     }
 
     public bool TryCollectDocumentAuthority()

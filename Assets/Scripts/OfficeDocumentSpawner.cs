@@ -19,8 +19,9 @@ public sealed class OfficeDocumentSpawner : NetworkBehaviour
     private readonly HashSet<int> occupiedSpawnIndices = new HashSet<int>();
     private readonly Dictionary<OfficeDocumentPickup, int> pickupSpawnIndices =
         new Dictionary<OfficeDocumentPickup, int>();
+    private int pendingMapDocumentSpawns;
 
-    public int ActiveDocumentCount => pickupSpawnIndices.Count;
+    public int ActiveDocumentCount => pickupSpawnIndices.Count + pendingMapDocumentSpawns;
 
 #if UNITY_EDITOR
     private void Reset()
@@ -33,7 +34,7 @@ public sealed class OfficeDocumentSpawner : NetworkBehaviour
     {
         CacheValidSpawnPoints();
 
-        if (!Object.HasStateAuthority)
+        if (Object == null || !Object.HasStateAuthority)
             return;
 
         if (documentPrefab == null)
@@ -55,7 +56,7 @@ public sealed class OfficeDocumentSpawner : NetworkBehaviour
 
     public void OnDocumentCollected(OfficeDocumentPickup pickup)
     {
-        if (!Object.HasStateAuthority || pickup == null)
+        if (Object == null || !Object.HasStateAuthority || pickup == null)
             return;
 
         if (!pickupSpawnIndices.TryGetValue(pickup, out int oldSpawnIndex))
@@ -73,7 +74,7 @@ public sealed class OfficeDocumentSpawner : NetworkBehaviour
 
     public void SpawnDroppedDocuments(int count, Vector3 aroundPosition)
     {
-        if (!Object.HasStateAuthority || documentPrefab == null || count <= 0)
+        if (Object == null || !Object.HasStateAuthority || documentPrefab == null || count <= 0)
             return;
 
         for (int i = 0; i < count; i++)
@@ -131,7 +132,7 @@ public sealed class OfficeDocumentSpawner : NetworkBehaviour
 
     private void SpawnDocument(Vector3 position, Quaternion rotation, int spawnIndex)
     {
-        if (!Object || !Object.HasStateAuthority || documentPrefab == null || Runner == null)
+        if (Object == null || !Object.HasStateAuthority || documentPrefab == null || Runner == null)
             return;
 
         NetworkObject prefab = documentPrefab.GetComponent<NetworkObject>();
@@ -141,13 +142,64 @@ public sealed class OfficeDocumentSpawner : NetworkBehaviour
             return;
         }
 
-        NetworkObject spawnedObject = Runner.Spawn(prefab, position, rotation, PlayerRef.None,
-            (_, networkObject) => networkObject.GetComponent<OfficeDocumentPickup>().Initialize(this, spawnIndex));
-        OfficeDocumentPickup pickup = spawnedObject.GetComponent<OfficeDocumentPickup>();
         if (spawnIndex >= 0)
         {
-            occupiedSpawnIndices.Add(spawnIndex);
-            pickupSpawnIndices.Add(pickup, spawnIndex);
+            if (!occupiedSpawnIndices.Add(spawnIndex))
+                return;
+            pendingMapDocumentSpawns++;
+        }
+
+        SpawnDocumentAsync(Runner, prefab, position, rotation, spawnIndex);
+    }
+
+    private async void SpawnDocumentAsync(NetworkRunner activeRunner, NetworkObject prefab,
+        Vector3 position, Quaternion rotation, int spawnIndex)
+    {
+        try
+        {
+            NetworkSpawnOp spawnOperation = activeRunner.SpawnAsync(prefab, position, rotation, PlayerRef.None,
+                (_, networkObject) => networkObject.GetComponent<OfficeDocumentPickup>().Initialize(this, spawnIndex));
+            NetworkObject spawnedObject = await spawnOperation;
+            if (spawnIndex >= 0)
+                pendingMapDocumentSpawns = Mathf.Max(0, pendingMapDocumentSpawns - 1);
+
+            if (spawnedObject == null)
+            {
+                if (spawnIndex >= 0)
+                    occupiedSpawnIndices.Remove(spawnIndex);
+                return;
+            }
+
+            if (this == null || Runner != activeRunner || !activeRunner.IsRunning)
+            {
+                if (activeRunner.IsRunning)
+                    activeRunner.Despawn(spawnedObject);
+                if (spawnIndex >= 0)
+                    occupiedSpawnIndices.Remove(spawnIndex);
+                return;
+            }
+
+            OfficeDocumentPickup pickup = spawnedObject.GetComponent<OfficeDocumentPickup>();
+            if (pickup == null)
+            {
+                activeRunner.Despawn(spawnedObject);
+                if (spawnIndex >= 0)
+                    occupiedSpawnIndices.Remove(spawnIndex);
+                Debug.LogError("Document.prefab necesita OfficeDocumentPickup en su raíz.", documentPrefab);
+                return;
+            }
+
+            if (spawnIndex >= 0)
+                pickupSpawnIndices[pickup] = spawnIndex;
+        }
+        catch (System.Exception exception)
+        {
+            if (spawnIndex >= 0)
+            {
+                pendingMapDocumentSpawns = Mathf.Max(0, pendingMapDocumentSpawns - 1);
+                occupiedSpawnIndices.Remove(spawnIndex);
+            }
+            Debug.LogError($"No se pudo crear un documento de red: {exception.Message}", this);
         }
     }
 }

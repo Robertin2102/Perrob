@@ -14,6 +14,7 @@ public sealed class OfficeFusionGameSceneController : MonoBehaviour, INetworkRun
     [SerializeField] private GameObject offlinePlayerTemplate;
 
     private readonly Dictionary<PlayerRef, NetworkObject> spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
+    private readonly HashSet<PlayerRef> spawningPlayers = new HashSet<PlayerRef>();
     private NetworkRunner runner;
     private bool callbacksRegistered;
 
@@ -69,30 +70,57 @@ public sealed class OfficeFusionGameSceneController : MonoBehaviour, INetworkRun
         if (playerObject != null)
             activeRunner.Despawn(playerObject);
         spawnedPlayers.Remove(player);
+        spawningPlayers.Remove(player);
     }
 
-    private void SpawnPlayer(PlayerRef player)
+    private async void SpawnPlayer(PlayerRef player)
     {
-        if (runner == null || !runner.IsServer || playerPrefab == null || spawnedPlayers.ContainsKey(player))
+        if (runner == null || !runner.IsServer || playerPrefab == null ||
+            spawnedPlayers.ContainsKey(player) || !spawningPlayers.Add(player))
             return;
 
         PlayerRef[] activePlayers = runner.ActivePlayers.OrderBy(item => item.PlayerId).ToArray();
         int slot = Array.IndexOf(activePlayers, player);
         if (slot < 0 || slot > 1)
+        {
+            spawningPlayers.Remove(player);
             return;
+        }
 
         Transform spawn = slot == 0 ? playerOneSpawn : playerTwoSpawn;
         Vector3 position = spawn != null ? spawn.position : new Vector3(slot == 0 ? -2f : 2f, 0f, 0f);
         Quaternion rotation = spawn != null ? spawn.rotation : Quaternion.identity;
 
-        NetworkObject playerObject = runner.Spawn(
-            playerPrefab,
-            position,
-            rotation,
-            player,
-            (_, spawnedObject) => spawnedObject.GetComponent<OfficeFusionPlayer>().SetInitialSlot(slot));
+        NetworkRunner spawnRunner = runner;
+        try
+        {
+            NetworkSpawnOp spawnOperation = spawnRunner.SpawnAsync(
+                playerPrefab,
+                position,
+                rotation,
+                player,
+                (_, spawnedObject) => spawnedObject.GetComponent<OfficeFusionPlayer>().SetInitialSlot(slot));
+            NetworkObject playerObject = await spawnOperation;
+            spawningPlayers.Remove(player);
 
-        spawnedPlayers[player] = playerObject;
+            if (playerObject == null)
+                return;
+
+            if (this == null || runner != spawnRunner || !spawnRunner.IsRunning ||
+                !spawnRunner.ActivePlayers.Contains(player))
+            {
+                if (spawnRunner.IsRunning)
+                    spawnRunner.Despawn(playerObject);
+                return;
+            }
+
+            spawnedPlayers[player] = playerObject;
+        }
+        catch (Exception exception)
+        {
+            spawningPlayers.Remove(player);
+            Debug.LogError($"No se pudo crear el jugador {player} en Sc_Game: {exception.Message}", this);
+        }
     }
 
     private static NetworkRunner FindRunningRunner()

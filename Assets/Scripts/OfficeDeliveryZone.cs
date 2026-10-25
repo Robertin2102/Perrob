@@ -31,15 +31,18 @@ public sealed class OfficeDeliveryZone : NetworkBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        TryTrackPlayer(other);
+        OfficeFusionPlayer player = other.GetComponentInParent<OfficeFusionPlayer>();
+        if (IsPlayerStateAuthority(player))
+            TryTrackPlayer(other);
     }
 
     private void OnTriggerStay(Collider other)
     {
-        if (!Object.HasStateAuthority)
+        OfficeFusionPlayer networkPlayer = other.GetComponentInParent<OfficeFusionPlayer>();
+        if (!IsPlayerStateAuthority(networkPlayer))
             return;
 
-        OfficeFusionPlayer networkPlayer = TryTrackPlayer(other);
+        networkPlayer = TryTrackPlayer(other);
         if (networkPlayer == null)
             return;
         OfficePlayerMotor player = networkPlayer.Motor;
@@ -69,7 +72,7 @@ public sealed class OfficeDeliveryZone : NetworkBehaviour
     {
         OfficeFusionPlayer networkPlayer = other.GetComponentInParent<OfficeFusionPlayer>();
         OfficePlayerMotor player = networkPlayer != null ? networkPlayer.Motor : null;
-        if (Object.HasStateAuthority && player != null && deliveryProgress.Remove(player))
+        if (IsPlayerStateAuthority(networkPlayer) && player != null && deliveryProgress.Remove(player))
         {
             networkPlayer.SetDeliveryProgressAuthority(0f);
             ProgressChanged?.Invoke(player, 0f);
@@ -80,7 +83,7 @@ public sealed class OfficeDeliveryZone : NetworkBehaviour
     {
         OfficeFusionPlayer networkPlayer = other.GetComponentInParent<OfficeFusionPlayer>();
         OfficePlayerMotor player = networkPlayer != null ? networkPlayer.Motor : null;
-        if (networkPlayer == null || !networkPlayer.Object || player == null ||
+        if (!IsPlayerStateAuthority(networkPlayer) || player == null ||
             networkPlayer.PlayerSlot != ownerPlayerId)
             return null;
 
@@ -91,6 +94,11 @@ public sealed class OfficeDeliveryZone : NetworkBehaviour
         }
 
         return networkPlayer;
+    }
+
+    private static bool IsPlayerStateAuthority(OfficeFusionPlayer player)
+    {
+        return player != null && player.Object != null && player.Object.HasStateAuthority;
     }
 
     private void SetProgress(OfficeFusionPlayer networkPlayer, float seconds)
