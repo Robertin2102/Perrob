@@ -190,6 +190,37 @@ public sealed class OfficeHudController : MonoBehaviour
             playerTwoScoreText.text = playerTwo != null ? playerTwo.DeliveredDocuments.ToString("00") : "00";
     }
 
+    public void RegisterNetworkPlayer(int slot, OfficePlayerMotor motor)
+    {
+        if (eventsSubscribed)
+        {
+            if (playerOne != null)
+            {
+                playerOne.CarriedDocumentsChanged -= OnCarriedDocumentsChanged;
+                playerOne.DeliveredDocumentsChanged -= OnScoresChanged;
+                playerOne.EnergyChanged -= OnEnergyChanged;
+            }
+            if (playerTwo != null)
+                playerTwo.DeliveredDocumentsChanged -= OnScoresChanged;
+            if (playerOneDeliveryZone != null)
+                playerOneDeliveryZone.ProgressChanged -= OnDeliveryProgressChanged;
+            eventsSubscribed = false;
+        }
+
+        if (slot == 0)
+            playerOne = motor;
+        else if (slot == 1)
+            playerTwo = motor;
+        else
+            return;
+
+        // Network players spawn after the HUD, so refresh subscriptions when they arrive.
+        eventsSubscribed = false;
+        SubscribeToEvents();
+        RefreshPlayerReadouts();
+        RefreshEnergy();
+    }
+
     private void UpdateTimerText()
     {
         if (timerText == null)

@@ -19,6 +19,7 @@ public sealed class OfficePaperThrower : MonoBehaviour
 
     private OfficePlayerMotor playerMotor;
     private float nextThrowTime;
+    private bool networkInputMode;
 
 #if UNITY_EDITOR
     private void Reset()
@@ -37,8 +38,16 @@ public sealed class OfficePaperThrower : MonoBehaviour
 
     private void Update()
     {
+        if (networkInputMode)
+            return;
+
         if (readMouseInput && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             RequestThrow();
+    }
+
+    public void SetNetworkInputMode(bool enabled)
+    {
+        networkInputMode = enabled;
     }
 
     /// <summary>Can be called by a mobile button or a future Photon input adapter.</summary>

@@ -50,6 +50,7 @@ public sealed class OfficePlayerMotor : MonoBehaviour
     private Vector3 respawnPosition;
     private Quaternion respawnRotation;
     private bool isKnockedOut;
+    private bool networkSimulation;
 
     public event Action<int> CarriedDocumentsChanged;
     public event Action<int> DeliveredDocumentsChanged;
@@ -85,6 +86,9 @@ public sealed class OfficePlayerMotor : MonoBehaviour
 
     private void Update()
     {
+        if (networkSimulation)
+            return;
+
         float deltaTime = Time.deltaTime;
         if (isKnockedOut)
         {
@@ -121,6 +125,74 @@ public sealed class OfficePlayerMotor : MonoBehaviour
     public void SetLocalInputEnabled(bool enabled)
     {
         readLocalKeyboard = enabled;
+    }
+
+    public void SetNetworkSimulation(bool enabled)
+    {
+        networkSimulation = enabled;
+    }
+
+    public void SetPlayerId(int value)
+    {
+        playerId = Mathf.Max(0, value);
+    }
+
+    public Vector2 CaptureMoveInput()
+    {
+        return GetMoveInput();
+    }
+
+    public bool CaptureAimPoint(out Vector3 worldPoint)
+    {
+        worldPoint = default;
+        if (aimCamera == null || Mouse.current == null)
+            return false;
+
+        Ray ray = aimCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        Plane floor = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
+        if (!floor.Raycast(ray, out float distance))
+            return false;
+
+        worldPoint = ray.GetPoint(distance);
+        return true;
+    }
+
+    /// <summary>Moves the character from Fusion's fixed simulation tick.</summary>
+    public void SimulateNetworkInput(Vector2 input, Vector3 aimPoint, bool hasAimPoint, float deltaTime)
+    {
+        if (!networkSimulation || characterController == null || !characterController.enabled)
+            return;
+
+        if (isKnockedOut)
+        {
+            knockoutTimer -= deltaTime;
+            if (knockoutTimer <= 0f)
+                Respawn();
+            return;
+        }
+
+        if (stunTimer > 0f)
+            stunTimer = Mathf.Max(0f, stunTimer - deltaTime);
+
+        if (hasAimPoint)
+        {
+            externalAimPoint = aimPoint;
+            hasExternalAimPoint = true;
+        }
+        else
+        {
+            hasExternalAimPoint = false;
+        }
+
+        input = IsStunned ? Vector2.zero : Vector2.ClampMagnitude(input, 1f);
+        Vector3 planarDirection = GetCameraRelativeDirection(input);
+        verticalVelocity = characterController.isGrounded
+            ? -2f
+            : verticalVelocity - gravity * deltaTime;
+        characterController.Move(planarDirection * (CurrentMoveSpeed * deltaTime) +
+                                 Vector3.up * (verticalVelocity * deltaTime));
+        UpdateFacing(planarDirection);
+        UpdateLocomotionAnimation(planarDirection.sqrMagnitude > 0.001f && !IsStunned);
     }
 
     /// <summary>Supply a world-space point for touch aiming or an authoritative network adapter.</summary>

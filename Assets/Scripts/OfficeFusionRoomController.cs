@@ -1,0 +1,226 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Fusion;
+using Fusion.Sockets;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+/// <summary>Small Host/Client lobby for a two-player office match.</summary>
+public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCallbacks
+{
+    [Header("Network player")]
+    [SerializeField] private NetworkObject playerPrefab;
+    [SerializeField] private NetworkObject lobbyStatePrefab;
+    [SerializeField] private Transform playerOneSpawn;
+    [SerializeField] private Transform playerTwoSpawn;
+    [SerializeField] private GameObject offlinePlayerTemplate;
+
+    [Header("Lobby")]
+    [SerializeField] private string defaultRoomName = "salario-minimo";
+
+    private readonly Dictionary<PlayerRef, NetworkObject> spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
+    private NetworkRunner runner;
+    private OfficeFusionPlayer localPlayer;
+    private OfficeFusionLobbyState lobbyState;
+    private NetworkObject lobbyStateObject;
+    private OfficeFusionPlayer[] playersBySlot = new OfficeFusionPlayer[2];
+    private string roomName;
+    private string status = "Crea una sala o únete a una existente.";
+    private bool connecting;
+
+    public bool IsConfigured => playerPrefab != null;
+    public string Status => status;
+    public string RoomName => roomName;
+    public bool IsConnecting => connecting;
+    public bool HasActiveSession => runner != null && runner.IsRunning;
+    public bool IsHost => runner != null && runner.IsRunning && runner.IsServer;
+    public int ConnectedPlayers => HasActiveSession ? runner.ActivePlayers.Count() : 0;
+    public bool HasLobbyState => lobbyState != null;
+    public bool LocalPlayerReady => lobbyState != null && runner != null && lobbyState.IsReady(runner.LocalPlayer);
+    public bool BothPlayersReady => lobbyState != null && lobbyState.BothPlayersReady;
+    public bool CanStartMatch => IsHost && ConnectedPlayers == 2 && BothPlayersReady;
+    public string ReadySummary => lobbyState != null
+        ? lobbyState.GetReadySummary()
+        : "Esperando a que se conecte el segundo empleado...";
+
+    private void Awake()
+    {
+        roomName = defaultRoomName;
+        Application.targetFrameRate = 60;
+        if (offlinePlayerTemplate != null)
+            offlinePlayerTemplate.SetActive(false);
+    }
+
+    public void Configure(NetworkObject prefab, Transform spawnOne, Transform spawnTwo, GameObject template)
+    {
+        playerPrefab = prefab;
+        playerOneSpawn = spawnOne;
+        playerTwoSpawn = spawnTwo;
+        offlinePlayerTemplate = template;
+    }
+
+    public void ConfigureLobbyState(NetworkObject prefab)
+    {
+        lobbyStatePrefab = prefab;
+    }
+
+    public void CreateRoom(string code) => StartSession(GameMode.Host, code);
+
+    public void JoinRoom(string code) => StartSession(GameMode.Client, code);
+
+    public void ToggleReady()
+    {
+        if (!HasActiveSession || ConnectedPlayers != 2 || lobbyState == null || runner == null)
+            return;
+
+        lobbyState.RPC_SetReady(!LocalPlayerReady);
+    }
+
+    public void StartMatch()
+    {
+        if (!CanStartMatch)
+            return;
+
+        int gameSceneIndex = SceneUtility.GetBuildIndexByScenePath("Assets/Scenes/Sc_Game.unity");
+        if (gameSceneIndex < 0)
+        {
+            status = "Sc_Game no está incluida en Build Settings.";
+            return;
+        }
+
+        status = "Los dos empleados están listos. Abriendo la oficina...";
+        runner.LoadScene(SceneRef.FromIndex(gameSceneIndex), LoadSceneMode.Single, LocalPhysicsMode.None, true);
+    }
+
+    private async void StartSession(GameMode mode, string code)
+    {
+        if (connecting || HasActiveSession)
+            return;
+
+        roomName = string.IsNullOrWhiteSpace(code) ? defaultRoomName : code.Trim();
+        if (string.IsNullOrWhiteSpace(roomName))
+            roomName = defaultRoomName;
+
+        connecting = true;
+        status = mode == GameMode.Host ? "Creando sala..." : "Buscando la sala...";
+        DontDestroyOnLoad(gameObject);
+        runner = new GameObject("OfficeFusionRunner").AddComponent<NetworkRunner>();
+        runner.ProvideInput = true;
+        runner.AddCallbacks(this);
+        runner.gameObject.AddComponent<NetworkSceneManagerDefault>();
+        runner.gameObject.AddComponent<NetworkObjectProviderDefault>();
+
+        StartGameResult result = await runner.StartGame(new StartGameArgs
+        {
+            GameMode = mode,
+            SessionName = roomName,
+            PlayerCount = 2,
+            SceneManager = runner.GetComponent<NetworkSceneManagerDefault>()
+        });
+
+        connecting = false;
+        if (!result.Ok)
+        {
+            status = $"No se pudo conectar: {result.ShutdownReason}";
+            runner.RemoveCallbacks(this);
+            Destroy(runner.gameObject);
+            runner = null;
+            return;
+        }
+
+        status = "Conectado. Esperando al segundo empleado...";
+    }
+
+    public void RegisterSpawnedPlayer(int slot, OfficeFusionPlayer player)
+    {
+        if (slot < 0 || slot >= playersBySlot.Length || player == null)
+            return;
+
+        playersBySlot[slot] = player;
+        if (player.Object != null && player.Object.HasInputAuthority)
+            localPlayer = player;
+
+        OfficeHudController hud = FindFirstObjectByType<OfficeHudController>();
+        if (hud != null)
+            hud.RegisterNetworkPlayer(slot, player.Motor);
+
+        if (playersBySlot[0] != null && playersBySlot[1] != null)
+            status = "¡Los dos empleados están en la oficina!";
+    }
+
+    public void RegisterLobbyState(OfficeFusionLobbyState state)
+    {
+        lobbyState = state;
+    }
+
+    public void OnPlayerJoined(NetworkRunner activeRunner, PlayerRef player)
+    {
+        status = $"Conectado: {activeRunner.ActivePlayers.Count()}/2 empleados.";
+
+        if (!activeRunner.IsServer)
+            return;
+
+        if (activeRunner.ActivePlayers.Count() == 2 && lobbyStateObject == null)
+        {
+            if (lobbyStatePrefab == null)
+            {
+                status = "Falta el prefab de estado del lobby. Revisa la configuración de Sc_Menu.";
+                return;
+            }
+
+            lobbyStateObject = activeRunner.Spawn(lobbyStatePrefab, Vector3.zero, Quaternion.identity);
+        }
+
+    }
+
+    public void OnPlayerLeft(NetworkRunner activeRunner, PlayerRef player)
+    {
+        if (activeRunner.IsServer && spawnedPlayers.TryGetValue(player, out NetworkObject networkPlayer))
+        {
+            if (networkPlayer != null)
+                activeRunner.Despawn(networkPlayer);
+            spawnedPlayers.Remove(player);
+        }
+
+        if (activeRunner.IsServer && lobbyState != null)
+            lobbyState.ClearReadyState();
+
+        status = "Un empleado salió de la sala.";
+    }
+
+    public void OnInput(NetworkRunner activeRunner, NetworkInput input)
+    {
+        if (localPlayer != null)
+            input.Set(localPlayer.ReadLocalInput());
+    }
+
+    public void OnShutdown(NetworkRunner activeRunner, ShutdownReason shutdownReason)
+    {
+        status = $"Sesión cerrada: {shutdownReason}";
+        connecting = false;
+        runner = null;
+        localPlayer = null;
+        lobbyState = null;
+        lobbyStateObject = null;
+        playersBySlot = new OfficeFusionPlayer[2];
+        spawnedPlayers.Clear();
+    }
+
+    public void OnConnectedToServer(NetworkRunner activeRunner) => status = "Conectado a Photon.";
+    public void OnDisconnectedFromServer(NetworkRunner activeRunner, NetDisconnectReason reason) => status = $"Desconectado: {reason}";
+    public void OnConnectFailed(NetworkRunner activeRunner, NetAddress remoteAddress, NetConnectFailedReason reason) => status = $"Falló la conexión: {reason}";
+
+    public void OnReliableDataProgress(NetworkRunner activeRunner, PlayerRef player, ReliableKey key, float progress) { }
+    public void OnObjectExitAOI(NetworkRunner activeRunner, NetworkObject obj, PlayerRef player) { }
+    public void OnObjectEnterAOI(NetworkRunner activeRunner, NetworkObject obj, PlayerRef player) { }
+    public void OnInputMissing(NetworkRunner activeRunner, PlayerRef player, NetworkInput input) { }
+    public void OnConnectRequest(NetworkRunner activeRunner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }
+    public void OnSessionListUpdated(NetworkRunner activeRunner, List<SessionInfo> sessionList) { }
+    public void OnCustomAuthenticationResponse(NetworkRunner activeRunner, Dictionary<string, object> data) { }
+    public void OnHostMigration(NetworkRunner activeRunner, HostMigrationToken hostMigrationToken) { }
+    public void OnReliableDataReceived(NetworkRunner activeRunner, PlayerRef player, ReliableKey key, ReadOnlySpan<byte> data) { }
+    public void OnSceneLoadDone(NetworkRunner activeRunner) { }
+    public void OnSceneLoadStart(NetworkRunner activeRunner) { }
+}
