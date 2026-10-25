@@ -171,6 +171,16 @@ public sealed class OfficePlayerMotor : MonoBehaviour
             UpdateLocomotionAnimation(moving);
     }
 
+    /// <summary>Clear movement state after the network authority teleports this player back into the map.</summary>
+    public void ResetNetworkMotionAfterRespawn()
+    {
+        verticalVelocity = 0f;
+        externalAimPoint = default;
+        hasExternalAimPoint = false;
+        stunTimer = 0f;
+        UpdateLocomotionAnimation(false);
+    }
+
     public void SetPlayerId(int value)
     {
         playerId = Mathf.Max(0, value);

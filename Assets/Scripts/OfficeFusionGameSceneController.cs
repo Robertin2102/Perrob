@@ -29,6 +29,21 @@ public sealed class OfficeFusionGameSceneController : MonoBehaviour, INetworkRun
         offlinePlayerTemplate = template;
     }
 
+    public bool TryGetSpawnPose(int slot, out Vector3 position, out Quaternion rotation)
+    {
+        Transform spawn = slot == 0 ? playerOneSpawn : playerTwoSpawn;
+        if (spawn != null)
+        {
+            position = spawn.position;
+            rotation = spawn.rotation;
+            return true;
+        }
+
+        position = default;
+        rotation = Quaternion.identity;
+        return false;
+    }
+
     private void Awake()
     {
         runner = FindRunningRunner();

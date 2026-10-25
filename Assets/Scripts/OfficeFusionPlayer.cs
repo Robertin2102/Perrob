@@ -17,6 +17,7 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
     [Networked] public Vector3 RespawnPosition { get; set; }
     [Networked] public Quaternion RespawnRotation { get; set; }
     [Networked] public float DeliveryProgress { get; set; }
+    [Networked] private NetworkBool IsMoving { get; set; }
 
     private OfficePlayerMotor motor;
     private OfficePaperThrower thrower;
@@ -24,8 +25,6 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
     private float nextThrowAt;
     private bool hasInputAuthority;
     private bool hasStateAuthority;
-    private bool hasLastRenderPosition;
-    private Vector3 lastRenderPosition;
 
     public OfficePlayerMotor Motor => motor;
 
@@ -41,9 +40,6 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         stackVisuals = GetComponentInChildren<OfficeDocumentStackVisuals>(true);
         hasInputAuthority = Object != null && Object.HasInputAuthority;
         hasStateAuthority = Object != null && Object.HasStateAuthority;
-        lastRenderPosition = transform.position;
-        hasLastRenderPosition = true;
-
         if (hasStateAuthority)
         {
             Energy = motor != null ? motor.MaximumEnergy : 100f;
@@ -79,14 +75,7 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
             stackVisuals.SetDocumentCount(CarriedDocuments);
 
         if (!hasStateAuthority)
-        {
-            Vector3 currentPosition = transform.position;
-            bool moving = hasLastRenderPosition &&
-                          (currentPosition - lastRenderPosition).sqrMagnitude > 0.000025f;
-            motor.SetNetworkRemoteLocomotion(moving);
-            lastRenderPosition = currentPosition;
-            hasLastRenderPosition = true;
-        }
+            motor.SetNetworkRemoteLocomotion(IsMoving);
     }
 
     public override void Despawned(NetworkRunner runner, bool hasState)
@@ -103,17 +92,25 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
 
         if (KnockedOut)
         {
+            IsMoving = false;
             if (KnockoutTimer.ExpiredOrNotRunning(Runner))
                 RespawnAuthority();
             return;
         }
 
         if (!GetInput(out OfficeFusionInput input))
+        {
+            IsMoving = false;
             return;
+        }
 
         bool stunned = StunTimer.IsRunning && !StunTimer.Expired(Runner);
+        Vector3 positionBeforeMove = transform.position;
         motor.SimulateNetworkInput(stunned ? Vector2.zero : input.Move,
             input.AimPoint, input.HasAimPoint, Runner.DeltaTime);
+        Vector3 actualMovement = transform.position - positionBeforeMove;
+        actualMovement.y = 0f;
+        IsMoving = !stunned && actualMovement.sqrMagnitude > 0.000001f;
     }
 
     public OfficeFusionInput ReadLocalInput()
@@ -270,13 +267,28 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         if (!Object.HasStateAuthority)
             return;
 
+        OfficeFusionGameSceneController sceneController = FindFirstObjectByType<OfficeFusionGameSceneController>();
+        if (sceneController != null && sceneController.TryGetSpawnPose(PlayerSlot, out Vector3 spawnPosition, out Quaternion spawnRotation))
+        {
+            RespawnPosition = spawnPosition;
+            RespawnRotation = spawnRotation;
+        }
+
         CharacterController controller = GetComponent<CharacterController>();
         if (controller != null)
             controller.enabled = false;
-        transform.SetPositionAndRotation(RespawnPosition, RespawnRotation);
+
+        NetworkTransform networkTransform = GetComponent<NetworkTransform>();
+        if (networkTransform != null)
+            networkTransform.Teleport(RespawnPosition, RespawnRotation);
+        else
+            transform.SetPositionAndRotation(RespawnPosition, RespawnRotation);
+
         if (controller != null)
             controller.enabled = true;
 
+        motor?.ResetNetworkMotionAfterRespawn();
+        IsMoving = false;
         Energy = motor != null ? motor.MaximumEnergy : 100f;
         KnockedOut = false;
         KnockoutTimer = TickTimer.None;
