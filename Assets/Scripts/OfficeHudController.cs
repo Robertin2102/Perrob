@@ -278,5 +278,9 @@ public sealed class OfficeHudController : MonoBehaviour
         }
         if (resultsPanel != null)
             resultsPanel.SetActive(true);
+
+        OfficeFusionGameSceneController sceneController = FindFirstObjectByType<OfficeFusionGameSceneController>();
+        if (sceneController != null)
+            sceneController.ReturnToMenuAfterResult(10f);
     }
 }

@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Fusion;
 using Fusion.Sockets;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>Spawns one network-controlled office worker for each player in the running session.</summary>
 public sealed class OfficeFusionGameSceneController : MonoBehaviour, INetworkRunnerCallbacks
@@ -17,6 +19,7 @@ public sealed class OfficeFusionGameSceneController : MonoBehaviour, INetworkRun
     private readonly HashSet<PlayerRef> spawningPlayers = new HashSet<PlayerRef>();
     private NetworkRunner runner;
     private bool callbacksRegistered;
+    private bool returnToMenuScheduled;
 
     public void Configure(NetworkObject prefab, Transform spawnOne, Transform spawnTwo, GameObject template)
     {
@@ -54,6 +57,41 @@ public sealed class OfficeFusionGameSceneController : MonoBehaviour, INetworkRun
     {
         if (callbacksRegistered && runner != null)
             runner.RemoveCallbacks(this);
+    }
+
+    public void ReturnToMenuAfterResult(float delaySeconds = 10f)
+    {
+        if (runner == null || !runner.IsServer || returnToMenuScheduled)
+            return;
+
+        returnToMenuScheduled = true;
+        StartCoroutine(ReturnToMenuRoutine(delaySeconds));
+    }
+
+    private IEnumerator ReturnToMenuRoutine(float delaySeconds)
+    {
+        yield return new WaitForSecondsRealtime(Mathf.Max(0f, delaySeconds));
+
+        if (runner == null || !runner.IsRunning)
+            yield break;
+
+        int menuSceneIndex = SceneUtility.GetBuildIndexByScenePath("Assets/Scenes/Sc_Menu.unity");
+        if (menuSceneIndex < 0)
+        {
+            Debug.LogError("Sc_Menu no está incluida en Build Settings; no se puede volver al lobby.", this);
+            returnToMenuScheduled = false;
+            yield break;
+        }
+
+        foreach (NetworkObject playerObject in spawnedPlayers.Values)
+        {
+            if (playerObject != null)
+                runner.Despawn(playerObject);
+        }
+        spawnedPlayers.Clear();
+
+        runner.LoadScene(SceneRef.FromIndex(menuSceneIndex), LoadSceneMode.Single,
+            LocalPhysicsMode.None, true);
     }
 
     public void OnPlayerJoined(NetworkRunner activeRunner, PlayerRef player)
