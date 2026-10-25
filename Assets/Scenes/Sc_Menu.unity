@@ -1250,6 +1250,7 @@ MonoBehaviour:
   playerTwoSpawn: {fileID: 0}
   offlinePlayerTemplate: {fileID: 0}
   defaultRoomName: salario-minimo
+  fixedPhotonRegion: us
 --- !u!4 &859520704
 Transform:
   m_ObjectHideFlags: 0

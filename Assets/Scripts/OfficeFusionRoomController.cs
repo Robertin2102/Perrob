@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Fusion;
+using Fusion.Photon.Realtime;
 using Fusion.Sockets;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -19,6 +20,7 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
 
     [Header("Lobby")]
     [SerializeField] private string defaultRoomName = "salario-minimo";
+    [SerializeField] private string fixedPhotonRegion = "us";
 
     private readonly Dictionary<PlayerRef, NetworkObject> spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
     private NetworkRunner runner;
@@ -104,9 +106,15 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
         if (connecting || HasActiveSession)
             return;
 
-        roomName = string.IsNullOrWhiteSpace(code) ? defaultRoomName : code.Trim();
+        roomName = string.IsNullOrWhiteSpace(code)
+            ? defaultRoomName.Trim().ToLowerInvariant()
+            : code.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(roomName))
-            roomName = defaultRoomName;
+            roomName = "salario-minimo";
+
+        string region = string.IsNullOrWhiteSpace(fixedPhotonRegion)
+            ? string.Empty
+            : fixedPhotonRegion.Trim().ToLowerInvariant();
 
         connecting = true;
         status = mode == GameMode.Host ? "Creando sala..." : "Buscando la sala...";
@@ -117,25 +125,54 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
         runner.gameObject.AddComponent<NetworkSceneManagerDefault>();
         runner.gameObject.AddComponent<NetworkObjectProviderDefault>();
 
-        StartGameResult result = await runner.StartGame(new StartGameArgs
+        FusionAppSettings photonSettings = PhotonAppSettings.Global.AppSettings.GetCopy();
+        if (!string.IsNullOrEmpty(region))
+            photonSettings.FixedRegion = region;
+
+        StartGameResult result;
+        try
         {
-            GameMode = mode,
-            SessionName = roomName,
-            PlayerCount = 2,
-            SceneManager = runner.GetComponent<NetworkSceneManagerDefault>()
-        });
+            result = await runner.StartGame(new StartGameArgs
+            {
+                GameMode = mode,
+                SessionName = roomName,
+                PlayerCount = 2,
+                CustomPhotonAppSettings = photonSettings,
+                SceneManager = runner.GetComponent<NetworkSceneManagerDefault>()
+            });
+        }
+        catch (Exception exception)
+        {
+            connecting = false;
+            string action = mode == GameMode.Host ? "crear" : "encontrar";
+            string regionLabel = string.IsNullOrEmpty(region) ? "automática" : region;
+            status = $"No se pudo {action} la sala '{roomName}' en región {regionLabel}: {exception.Message}";
+            if (runner != null)
+            {
+                runner.RemoveCallbacks(this);
+                Destroy(runner.gameObject);
+                runner = null;
+            }
+            return;
+        }
 
         connecting = false;
         if (!result.Ok)
         {
-            status = $"No se pudo conectar: {result.ShutdownReason}";
+            string action = mode == GameMode.Host ? "crear" : "encontrar";
+            string regionLabel = string.IsNullOrEmpty(region) ? "automática" : region;
+            status = $"No se pudo {action} la sala '{roomName}' en región {regionLabel}: " +
+                     $"{result.ShutdownReason}. Revisa que ambos clientes usen el mismo código y región.";
             runner.RemoveCallbacks(this);
             Destroy(runner.gameObject);
             runner = null;
             return;
         }
 
-        status = "Conectado. Esperando al segundo empleado...";
+        string connectedRegion = runner.SessionInfo.Region;
+        status = mode == GameMode.Host
+            ? $"Sala '{roomName}' creada en {connectedRegion}. Esperando al segundo empleado..."
+            : $"Conectado a '{roomName}' en {connectedRegion}. Esperando al inicio...";
     }
 
     public void RegisterSpawnedPlayer(int slot, OfficeFusionPlayer player)
