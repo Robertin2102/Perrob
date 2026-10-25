@@ -135,6 +135,11 @@ public sealed class OfficePlayerMotor : MonoBehaviour
         networkSimulation = enabled;
     }
 
+    public void SetAimCamera(Camera camera)
+    {
+        aimCamera = camera;
+    }
+
     /// <summary>Applies the host-owned state received by the network player to this visual motor.</summary>
     public void ApplyNetworkState(int carried, int delivered, float energy, float maxEnergy,
         bool knockedOut, float stunSeconds)

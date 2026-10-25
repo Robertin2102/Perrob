@@ -53,6 +53,11 @@ public sealed class OfficePaperThrower : MonoBehaviour
         networkInputMode = enabled;
     }
 
+    public void SetAimCamera(Camera camera)
+    {
+        aimCamera = camera;
+    }
+
     /// <summary>Can be called by a mobile button or a future Photon input adapter.</summary>
     public void RequestThrow()
     {

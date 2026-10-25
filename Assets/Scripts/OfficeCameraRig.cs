@@ -20,6 +20,16 @@ public sealed class OfficeCameraRig : MonoBehaviour
 
     private Camera sceneCamera;
 
+    public Camera SceneCamera => sceneCamera != null ? sceneCamera : GetComponent<Camera>();
+
+    public void SetFollowTarget(Transform target)
+    {
+        followTarget = target;
+        followTargetPosition = target != null;
+        if (followTargetPosition)
+            SnapToTarget();
+    }
+
     private void Awake()
     {
         sceneCamera = GetComponent<Camera>();

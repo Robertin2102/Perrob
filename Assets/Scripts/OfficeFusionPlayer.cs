@@ -50,6 +50,9 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         if (thrower != null)
             thrower.SetNetworkInputMode(true);
 
+        if (Object.HasInputAuthority)
+            BindLocalCamera();
+
         RegisterWithRoomController();
     }
 
@@ -255,6 +258,21 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         OfficeFusionRoomController room = FindFirstObjectByType<OfficeFusionRoomController>();
         if (room != null)
             room.RegisterSpawnedPlayer(PlayerSlot, this);
+    }
+
+    private void BindLocalCamera()
+    {
+        OfficeCameraRig cameraRig = FindFirstObjectByType<OfficeCameraRig>();
+        Camera localCamera = cameraRig != null ? cameraRig.SceneCamera : Camera.main;
+        if (localCamera == null)
+            return;
+
+        if (cameraRig != null)
+            cameraRig.SetFollowTarget(transform);
+        if (motor != null)
+            motor.SetAimCamera(localCamera);
+        if (thrower != null)
+            thrower.SetAimCamera(localCamera);
     }
 }
 
