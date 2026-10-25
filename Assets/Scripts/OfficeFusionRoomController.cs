@@ -31,6 +31,8 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
     private string roomName;
     private string status = "Crea una sala o únete a una existente.";
     private bool connecting;
+    private OfficeFusionLobbyState CurrentLobbyState =>
+        lobbyState != null ? lobbyState : FindFirstObjectByType<OfficeFusionLobbyState>();
 
     public bool IsConfigured => playerPrefab != null;
     public string Status => status;
@@ -39,17 +41,18 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
     public bool HasActiveSession => runner != null && runner.IsRunning;
     public bool IsHost => runner != null && runner.IsRunning && runner.IsServer;
     public int ConnectedPlayers => HasActiveSession ? runner.ActivePlayers.Count() : 0;
-    public bool HasLobbyState => lobbyState != null;
-    public bool LocalPlayerReady => lobbyState != null && runner != null && lobbyState.IsReady(runner.LocalPlayer);
-    public bool BothPlayersReady => lobbyState != null && lobbyState.BothPlayersReady;
+    public bool HasLobbyState => CurrentLobbyState != null;
+    public bool LocalPlayerReady => CurrentLobbyState != null && runner != null &&
+                                    CurrentLobbyState.IsReady(runner.LocalPlayer);
+    public bool BothPlayersReady => CurrentLobbyState != null && CurrentLobbyState.BothPlayersReady;
     public bool CanStartMatch => IsHost && ConnectedPlayers == 2 && BothPlayersReady;
     public OfficeFusionPlayer LocalNetworkPlayer => localPlayer;
     public int LocalPlayerSlot => localPlayer != null ? localPlayer.PlayerSlot : -1;
     public float PingMilliseconds => HasActiveSession
         ? (float)(runner.GetPlayerRtt(runner.LocalPlayer) * 1000.0)
         : 0f;
-    public string ReadySummary => lobbyState != null
-        ? lobbyState.GetReadySummary()
+    public string ReadySummary => CurrentLobbyState != null
+        ? CurrentLobbyState.GetReadySummary()
         : "Esperando a que se conecte el segundo empleado...";
 
     private void Awake()
@@ -79,10 +82,15 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
 
     public void ToggleReady()
     {
-        if (!HasActiveSession || ConnectedPlayers != 2 || lobbyState == null || runner == null)
+        OfficeFusionLobbyState state = CurrentLobbyState;
+        if (!HasActiveSession || ConnectedPlayers != 2 || state == null || runner == null)
             return;
 
-        lobbyState.RPC_SetReady(!LocalPlayerReady);
+        bool ready = !state.IsReady(runner.LocalPlayer);
+        if (state.Object != null && state.Object.HasStateAuthority)
+            state.QueueHostReadyChange(runner.LocalPlayer, ready);
+        else
+            state.RPC_SetReady(ready);
     }
 
     public void StartMatch()
@@ -226,8 +234,8 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
             spawnedPlayers.Remove(player);
         }
 
-        if (activeRunner.IsServer && lobbyState != null)
-            lobbyState.ClearReadyState();
+        if (activeRunner.IsServer && CurrentLobbyState != null)
+            CurrentLobbyState.ClearReadyState();
 
         status = "Un empleado salió de la sala.";
     }
