@@ -115,6 +115,15 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         Vector3 actualMovement = transform.position - positionBeforeMove;
         actualMovement.y = 0f;
         IsMoving = !stunned && actualMovement.sqrMagnitude > 0.000001f;
+
+        if (input.Throw && !stunned)
+        {
+            Vector3 aimDirection = input.HasAimPoint
+                ? input.AimPoint - transform.position
+                : transform.forward;
+            aimDirection.y = 0f;
+            ThrowPaperAuthority(aimDirection);
+        }
     }
 
     public OfficeFusionInput ReadLocalInput()
@@ -125,6 +134,7 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
             input.Move = motor.CaptureMoveInput();
             input.HasAimPoint = motor.CaptureAimPoint(out Vector3 point);
             input.AimPoint = point;
+            input.Throw = thrower != null && thrower.ConsumeMouseThrowRequest();
         }
 
         return input;
@@ -341,4 +351,5 @@ public struct OfficeFusionInput : INetworkInput
     public Vector2 Move;
     public Vector3 AimPoint;
     public NetworkBool HasAimPoint;
+    public NetworkBool Throw;
 }

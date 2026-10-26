@@ -20,6 +20,7 @@ public sealed class OfficePaperThrower : MonoBehaviour
     private OfficePlayerMotor playerMotor;
     private float nextThrowTime;
     private bool networkInputMode;
+    private bool mouseThrowPending;
 
     public Transform ThrowPoint => throwPoint;
     public float ThrowSpeed => throwSpeed;
@@ -44,8 +45,18 @@ public sealed class OfficePaperThrower : MonoBehaviour
 
     private void Update()
     {
-        if (readMouseInput && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        if (!readMouseInput || Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
+            return;
+
+        if (!networkInputMode)
+        {
             RequestThrow();
+            return;
+        }
+
+        OfficeFusionPlayer networkPlayer = GetComponent<OfficeFusionPlayer>();
+        if (networkPlayer != null && networkPlayer.HasLocalInputAuthority)
+            mouseThrowPending = true;
     }
 
     public void SetNetworkInputMode(bool enabled)
@@ -57,6 +68,13 @@ public sealed class OfficePaperThrower : MonoBehaviour
     {
         if (enabled)
             readMouseInput = false;
+    }
+
+    public bool ConsumeMouseThrowRequest()
+    {
+        bool requested = mouseThrowPending;
+        mouseThrowPending = false;
+        return requested;
     }
 
     public void SetAimCamera(Camera camera)
