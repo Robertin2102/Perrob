@@ -66,7 +66,8 @@ public sealed class OfficePaperThrower : MonoBehaviour
 
     public void SetTouchInputMode(bool enabled)
     {
-        if (enabled)
+        bool handheldDevice = Application.isMobilePlatform || SystemInfo.deviceType == DeviceType.Handheld;
+        if (enabled && handheldDevice)
             readMouseInput = false;
     }
 

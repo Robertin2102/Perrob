@@ -51,6 +51,7 @@ public sealed class OfficePlayerMotor : MonoBehaviour
     private Quaternion respawnRotation;
     private bool isKnockedOut;
     private bool networkSimulation;
+    private bool touchAimInputMode;
 
     public event Action<int> CarriedDocumentsChanged;
     public event Action<int> DeliveredDocumentsChanged;
@@ -140,6 +141,11 @@ public sealed class OfficePlayerMotor : MonoBehaviour
         aimCamera = camera;
     }
 
+    public void SetTouchAimInputMode(bool enabled)
+    {
+        touchAimInputMode = enabled;
+    }
+
     /// <summary>Applies the host-owned state received by the network player to this visual motor.</summary>
     public void ApplyNetworkState(int carried, int delivered, float energy, float maxEnergy,
         bool knockedOut, float stunSeconds)
@@ -200,10 +206,13 @@ public sealed class OfficePlayerMotor : MonoBehaviour
         }
 
         worldPoint = default;
-        if (aimCamera == null || Mouse.current == null)
+        Pointer pointer = Mouse.current;
+        if (pointer == null && !touchAimInputMode)
+            pointer = Pointer.current;
+        if (aimCamera == null || pointer == null)
             return false;
 
-        Ray ray = aimCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        Ray ray = aimCamera.ScreenPointToRay(pointer.position.ReadValue());
         Plane floor = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
         if (!floor.Raycast(ray, out float distance))
             return false;
@@ -284,9 +293,13 @@ public sealed class OfficePlayerMotor : MonoBehaviour
             }
         }
 
-        if (aimCamera != null && Mouse.current != null)
+        Pointer pointer = Mouse.current;
+        if (pointer == null && !touchAimInputMode)
+            pointer = Pointer.current;
+
+        if (aimCamera != null && pointer != null)
         {
-            Ray ray = aimCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+            Ray ray = aimCamera.ScreenPointToRay(pointer.position.ReadValue());
             Plane floor = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
             if (floor.Raycast(ray, out float distance))
             {

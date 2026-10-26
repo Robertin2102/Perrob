@@ -29,6 +29,8 @@ public sealed class OfficeTouchControls : MonoBehaviour
     {
         motor = playerMotor;
         thrower = paperThrower;
+        if (motor != null)
+            motor.SetTouchAimInputMode(true);
         if (thrower != null)
             thrower.SetTouchInputMode(true);
         BuildControls();
