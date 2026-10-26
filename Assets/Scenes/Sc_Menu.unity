@@ -1252,7 +1252,7 @@ MonoBehaviour:
   defaultRoomName: salario-minimo
   fixedPhotonRegion: us
   backendBaseUrl: https://perrobbackend.onrender.com
-  matchIngestToken: ''
+  matchIngestToken: 
 --- !u!4 &859520704
 Transform:
   m_ObjectHideFlags: 0
