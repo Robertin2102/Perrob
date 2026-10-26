@@ -280,6 +280,9 @@ public sealed class OfficeHudController : MonoBehaviour
             resultsPanel.SetActive(true);
 
         OfficeFusionGameSceneController sceneController = FindFirstObjectByType<OfficeFusionGameSceneController>();
+        OfficeFusionRoomController room = FindFirstObjectByType<OfficeFusionRoomController>();
+        if (room != null)
+            room.ReportMatchOnce(networkPlayerOne, networkPlayerTwo);
         if (sceneController != null)
             sceneController.ReturnToMenuAfterResult(10f);
     }

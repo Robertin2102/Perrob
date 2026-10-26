@@ -117,7 +117,12 @@ public sealed class PaperBallProjectile : NetworkBehaviour
                     continue;
 
                 if (target != null)
-                    target.ApplyDamageAuthority(Damage);
+                {
+                    OfficeFusionRoomController room = FindFirstObjectByType<OfficeFusionRoomController>();
+                    OfficeFusionPlayer attacker = room != null ? room.FindPlayerByInputAuthority(Owner) : null;
+                    if (target.ApplyDamageAuthority(Damage) && attacker != null)
+                        attacker.RecordPaperHitAuthority(target.KnockedOut);
+                }
 
                 Runner.Despawn(Object);
                 return;

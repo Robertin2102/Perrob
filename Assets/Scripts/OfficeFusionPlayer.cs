@@ -18,6 +18,13 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
     [Networked] public Vector3 RespawnPosition { get; set; }
     [Networked] public Quaternion RespawnRotation { get; set; }
     [Networked] public float DeliveryProgress { get; set; }
+    [Networked] public NetworkString<_64> TelemetryPlayerId { get; set; }
+    [Networked] public int PaperBallsThrown { get; set; }
+    [Networked] public int PaperHitsLanded { get; set; }
+    [Networked] public int PaperHitsReceived { get; set; }
+    [Networked] public int Knockouts { get; set; }
+    [Networked] public int Deaths { get; set; }
+    [Networked] public float SurvivalSeconds { get; set; }
     [Networked] private NetworkBool IsMoving { get; set; }
 
     private OfficePlayerMotor motor;
@@ -61,9 +68,25 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
 
         if (hasInputAuthority)
         {
+            OfficeFusionRoomController room = FindFirstObjectByType<OfficeFusionRoomController>();
+            string telemetryId = room != null ? room.GetLocalTelemetryPlayerId() : string.Empty;
+            if (!string.IsNullOrEmpty(telemetryId))
+            {
+                if (hasStateAuthority)
+                    TelemetryPlayerId = telemetryId;
+                else
+                    RPC_SetTelemetryPlayerId(telemetryId);
+            }
             BindLocalCamera();
             CreateTouchControlsIfAvailable();
         }
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    private void RPC_SetTelemetryPlayerId(string telemetryId)
+    {
+        if (Object.HasStateAuthority && !string.IsNullOrWhiteSpace(telemetryId) && telemetryId.Length <= 64)
+            TelemetryPlayerId = telemetryId;
     }
 
     public override void Render()
@@ -101,6 +124,8 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
                 RespawnAuthority();
             return;
         }
+
+        SurvivalSeconds += Runner.DeltaTime;
 
         if (!GetInput(out OfficeFusionInput input))
         {
@@ -172,6 +197,7 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         direction.y = 0f;
         direction.Normalize();
         nextThrowAt = Runner.SimulationTime + 0.8f;
+        PaperBallsThrown++;
 
         Vector3 origin = thrower != null && thrower.ThrowPoint != null
             ? thrower.ThrowPoint.position
@@ -245,18 +271,20 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
             DeliveryProgress = Mathf.Clamp01(progress);
     }
 
-    public void ApplyDamageAuthority(float amount)
+    public bool ApplyDamageAuthority(float amount)
     {
         if (!Object.HasStateAuthority || KnockedOut || amount <= 0f)
-            return;
+            return false;
 
+        PaperHitsReceived++;
         Energy = Mathf.Max(0f, Energy - amount);
         if (Energy > 0f)
         {
             StunTimer = TickTimer.CreateFromSeconds(Runner, motor != null ? motor.HitStunSeconds : 0.65f);
-            return;
+            return true;
         }
 
+        Deaths++;
         KnockedOut = true;
         StunTimer = TickTimer.None;
         KnockoutTimer = TickTimer.CreateFromSeconds(Runner, motor != null ? motor.RespawnDelay : 3f);
@@ -267,6 +295,16 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
             if (spawner != null)
                 spawner.SpawnDroppedDocuments(dropped, transform.position);
         }
+        return true;
+    }
+
+    public void RecordPaperHitAuthority(bool knockedOutTarget)
+    {
+        if (!Object.HasStateAuthority)
+            return;
+        PaperHitsLanded++;
+        if (knockedOutTarget)
+            Knockouts++;
     }
 
     public void SetInitialSlot(int slot)

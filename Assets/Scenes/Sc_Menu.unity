@@ -1251,6 +1251,8 @@ MonoBehaviour:
   offlinePlayerTemplate: {fileID: 0}
   defaultRoomName: salario-minimo
   fixedPhotonRegion: us
+  backendBaseUrl: https://perrobbackend.onrender.com
+  matchIngestToken: ''
 --- !u!4 &859520704
 Transform:
   m_ObjectHideFlags: 0

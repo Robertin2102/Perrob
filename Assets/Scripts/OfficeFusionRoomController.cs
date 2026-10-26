@@ -1,11 +1,14 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Fusion;
 using Fusion.Photon.Realtime;
 using Fusion.Sockets;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 
 /// <summary>Small Host/Client lobby for a two-player office match.</summary>
@@ -22,6 +25,10 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
     [SerializeField] private string defaultRoomName = "salario-minimo";
     [SerializeField] private string fixedPhotonRegion = "us";
 
+    [Header("Backend de resultados")]
+    [SerializeField] private string backendBaseUrl = "https://perrobbackend.onrender.com";
+    [SerializeField] private string matchIngestToken;
+
     private readonly Dictionary<PlayerRef, NetworkObject> spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
     private NetworkRunner runner;
     private OfficeFusionPlayer localPlayer;
@@ -31,6 +38,9 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
     private string roomName;
     private string status = "Crea una sala o únete a una existente.";
     private bool connecting;
+    private string currentMatchId;
+    private DateTime currentMatchStartedAt;
+    private bool matchReportStarted;
     private OfficeFusionLobbyState CurrentLobbyState
     {
         get
@@ -115,7 +125,149 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
         }
 
         status = "Los dos empleados están listos. Abriendo la oficina...";
+        currentMatchId = Guid.NewGuid().ToString();
+        currentMatchStartedAt = DateTime.UtcNow;
+        matchReportStarted = false;
         runner.LoadScene(SceneRef.FromIndex(gameSceneIndex), LoadSceneMode.Single, LocalPhysicsMode.None, true);
+    }
+
+    public string GetLocalTelemetryPlayerId()
+    {
+        const string key = "Perrob.TelemetryPlayerId";
+        string id = PlayerPrefs.GetString(key, string.Empty);
+        if (!string.IsNullOrEmpty(id))
+            return id;
+
+        id = Guid.NewGuid().ToString("N");
+        PlayerPrefs.SetString(key, id);
+        PlayerPrefs.Save();
+        return id;
+    }
+
+    public OfficeFusionPlayer FindPlayerByInputAuthority(PlayerRef owner)
+    {
+        foreach (OfficeFusionPlayer player in playersBySlot)
+        {
+            if (player != null && player.Object != null && player.Object.InputAuthority == owner)
+                return player;
+        }
+        return null;
+    }
+
+    public void ReportMatchOnce(OfficeFusionPlayer playerOne, OfficeFusionPlayer playerTwo)
+    {
+        if (!IsHost || matchReportStarted || playerOne == null || playerTwo == null ||
+            string.IsNullOrEmpty(currentMatchId))
+            return;
+
+        string token = string.IsNullOrWhiteSpace(matchIngestToken)
+            ? Environment.GetEnvironmentVariable("PERROB_MATCH_INGEST_TOKEN")
+            : matchIngestToken.Trim();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Debug.LogWarning("No se enviará la partida: configura Match Ingest Token en OfficeFusionRoomController.", this);
+            return;
+        }
+
+        DateTime endedAt = DateTime.UtcNow;
+        float duration = (float)(endedAt - currentMatchStartedAt).TotalSeconds;
+        if (duration < 1f)
+            return;
+
+        MatchReport report = new MatchReport
+        {
+            matchId = currentMatchId,
+            roomCode = roomName != null && roomName.Length > 64 ? roomName.Substring(0, 64) : roomName,
+            startedAt = currentMatchStartedAt.ToString("O"),
+            endedAt = endedAt.ToString("O"),
+            players = new[]
+            {
+                MakePlayerReport(playerOne, duration),
+                MakePlayerReport(playerTwo, duration)
+            }
+        };
+        matchReportStarted = true;
+        StartCoroutine(SendMatchReport(JsonUtility.ToJson(report), token, currentMatchId));
+    }
+
+    private static MatchPlayerReport MakePlayerReport(OfficeFusionPlayer player, float duration)
+    {
+        string playerId = player.TelemetryPlayerId.ToString();
+        if (string.IsNullOrWhiteSpace(playerId))
+            playerId = "fusion-slot-" + player.PlayerSlot;
+        return new MatchPlayerReport
+        {
+            slot = player.PlayerSlot,
+            playerId = playerId,
+            deliveredDocuments = player.DeliveredDocuments,
+            paperBallsThrown = player.PaperBallsThrown,
+            paperHitsLanded = player.PaperHitsLanded,
+            paperHitsReceived = player.PaperHitsReceived,
+            knockouts = player.Knockouts,
+            deaths = player.Deaths,
+            survivalSeconds = Mathf.Clamp(player.SurvivalSeconds, 0f, duration)
+        };
+    }
+
+    private IEnumerator SendMatchReport(string json, string token, string matchId)
+    {
+        string url = backendBaseUrl.TrimEnd('/') + "/api/matches";
+        byte[] body = Encoding.UTF8.GetBytes(json);
+        for (int attempt = 1; attempt <= 3; attempt++)
+        {
+            using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
+            {
+                request.uploadHandler = new UploadHandlerRaw(body);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                request.SetRequestHeader("Authorization", "Bearer " + token);
+                request.timeout = 90;
+                yield return request.SendWebRequest();
+
+                if (request.result == UnityWebRequest.Result.Success &&
+                    (request.responseCode == 200 || request.responseCode == 201))
+                {
+                    Debug.Log("Partida " + matchId + " guardada en el backend.", this);
+                    yield break;
+                }
+
+                if (request.responseCode >= 400 && request.responseCode < 500)
+                {
+                    Debug.LogError("El backend rechazó la partida (HTTP " + request.responseCode +
+                        "): " + request.downloadHandler.text, this);
+                    yield break;
+                }
+
+                Debug.LogWarning("No se pudo enviar la partida (intento " + attempt + "/3): " +
+                    request.error, this);
+            }
+
+            yield return new WaitForSecondsRealtime(2f * attempt);
+        }
+    }
+
+    [Serializable]
+    private sealed class MatchReport
+    {
+        public string matchId;
+        public string roomCode;
+        public string startedAt;
+        public string endedAt;
+        public MatchPlayerReport[] players;
+    }
+
+    [Serializable]
+    private sealed class MatchPlayerReport
+    {
+        public int slot;
+        public string playerId;
+        public int deliveredDocuments;
+        public int paperBallsThrown;
+        public int paperHitsLanded;
+        public int paperHitsReceived;
+        public int knockouts;
+        public int deaths;
+        public float survivalSeconds;
     }
 
     private async void StartSession(GameMode mode, string code)
