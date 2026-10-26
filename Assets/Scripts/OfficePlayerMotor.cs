@@ -193,6 +193,12 @@ public sealed class OfficePlayerMotor : MonoBehaviour
 
     public bool CaptureAimPoint(out Vector3 worldPoint)
     {
+        if (hasExternalAimPoint)
+        {
+            worldPoint = externalAimPoint;
+            return true;
+        }
+
         worldPoint = default;
         if (aimCamera == null || Mouse.current == null)
             return false;
@@ -246,6 +252,58 @@ public sealed class OfficePlayerMotor : MonoBehaviour
     {
         externalAimPoint = worldPoint;
         hasExternalAimPoint = true;
+    }
+
+    /// <summary>Convert the right-hand mobile aim stick into a camera-relative world direction.</summary>
+    public void SetTouchAimDirection(Vector2 direction)
+    {
+        direction = Vector2.ClampMagnitude(direction, 1f);
+        if (direction.sqrMagnitude < 0.01f)
+            return;
+
+        Vector3 forward = aimCamera != null ? aimCamera.transform.forward : Vector3.forward;
+        forward = Vector3.ProjectOnPlane(forward, Vector3.up);
+        if (forward.sqrMagnitude < 0.001f)
+            forward = Vector3.forward;
+        forward.Normalize();
+        Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+        Vector3 worldDirection = (right * direction.x + forward * direction.y).normalized;
+        SetAimPoint(transform.position + worldDirection * 10f);
+    }
+
+    public bool TryGetAimDirection(out Vector3 direction)
+    {
+        if (hasExternalAimPoint)
+        {
+            direction = externalAimPoint - transform.position;
+            direction.y = 0f;
+            if (direction.sqrMagnitude > 0.001f)
+            {
+                direction.Normalize();
+                return true;
+            }
+        }
+
+        if (aimCamera != null && Mouse.current != null)
+        {
+            Ray ray = aimCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+            Plane floor = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
+            if (floor.Raycast(ray, out float distance))
+            {
+                direction = ray.GetPoint(distance) - transform.position;
+                direction.y = 0f;
+                if (direction.sqrMagnitude > 0.001f)
+                {
+                    direction.Normalize();
+                    return true;
+                }
+            }
+        }
+
+        direction = transform.forward;
+        direction.y = 0f;
+        direction = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector3.forward;
+        return false;
     }
 
     public void ClearExternalAimPoint()

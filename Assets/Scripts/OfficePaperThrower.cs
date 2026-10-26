@@ -53,6 +53,12 @@ public sealed class OfficePaperThrower : MonoBehaviour
         networkInputMode = enabled;
     }
 
+    public void SetTouchInputMode(bool enabled)
+    {
+        if (enabled)
+            readMouseInput = false;
+    }
+
     public void SetAimCamera(Camera camera)
     {
         aimCamera = camera;
@@ -90,18 +96,8 @@ public sealed class OfficePaperThrower : MonoBehaviour
 
     private Vector3 GetAimDirection()
     {
-        if (aimCamera != null && Mouse.current != null)
-        {
-            Ray ray = aimCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
-            Plane floor = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
-            if (floor.Raycast(ray, out float distance))
-            {
-                Vector3 direction = ray.GetPoint(distance) - transform.position;
-                direction.y = 0f;
-                if (direction.sqrMagnitude > 0.001f)
-                    return direction.normalized;
-            }
-        }
+        if (playerMotor != null && playerMotor.TryGetAimDirection(out Vector3 aimDirection))
+            return aimDirection;
 
         Vector3 forward = transform.forward;
         forward.y = 0f;

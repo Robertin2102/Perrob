@@ -1,5 +1,6 @@
 using Fusion;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>Host-authoritative player state, movement, combat and document accounting.</summary>
 public sealed class OfficeFusionPlayer : NetworkBehaviour
@@ -57,7 +58,10 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
             thrower.SetNetworkInputMode(true);
 
         if (hasInputAuthority)
+        {
             BindLocalCamera();
+            CreateTouchControlsIfAvailable();
+        }
 
         RegisterWithRoomController();
     }
@@ -315,6 +319,17 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
             motor.SetAimCamera(localCamera);
         if (thrower != null)
             thrower.SetAimCamera(localCamera);
+    }
+
+    private void CreateTouchControlsIfAvailable()
+    {
+        if (!Application.isMobilePlatform && Touchscreen.current == null)
+            return;
+
+        OfficeTouchControls controls = GetComponent<OfficeTouchControls>();
+        if (controls == null)
+            controls = gameObject.AddComponent<OfficeTouchControls>();
+        controls.Initialize(motor, thrower);
     }
 
     public bool HasLocalInputAuthority => hasInputAuthority;
