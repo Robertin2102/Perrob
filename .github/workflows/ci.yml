@@ -44,7 +44,6 @@ jobs:
           testMode: All
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           checkName: Unity Test Results
-          coverageEnabled: false
 
       - name: Upload Unity test reports
         if: always()
