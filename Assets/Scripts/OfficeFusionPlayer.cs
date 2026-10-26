@@ -57,13 +57,13 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         if (thrower != null)
             thrower.SetNetworkInputMode(true);
 
+        RegisterWithRoomController();
+
         if (hasInputAuthority)
         {
             BindLocalCamera();
             CreateTouchControlsIfAvailable();
         }
-
-        RegisterWithRoomController();
     }
 
     public override void Render()
@@ -339,7 +339,15 @@ public sealed class OfficeFusionPlayer : NetworkBehaviour
         OfficeTouchControls controls = GetComponent<OfficeTouchControls>();
         if (controls == null)
             controls = gameObject.AddComponent<OfficeTouchControls>();
-        controls.Initialize(motor, thrower);
+        try
+        {
+            controls.Initialize(motor, thrower);
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning($"No se pudieron crear los controles táctiles: {exception.Message}", this);
+            Destroy(controls);
+        }
     }
 
     public bool HasLocalInputAuthority => hasInputAuthority;
