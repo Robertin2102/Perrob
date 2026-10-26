@@ -146,6 +146,19 @@ public sealed class OfficePlayerMotor : MonoBehaviour
         touchAimInputMode = enabled;
     }
 
+    private Pointer GetAimPointer()
+    {
+        bool handheldDevice = Application.isMobilePlatform || SystemInfo.deviceType == DeviceType.Handheld;
+        if (touchAimInputMode && handheldDevice)
+            return null;
+
+        if (Mouse.current != null)
+            return Mouse.current;
+
+        Pointer currentPointer = Pointer.current;
+        return currentPointer != null && !(currentPointer is Touchscreen) ? currentPointer : null;
+    }
+
     /// <summary>Applies the host-owned state received by the network player to this visual motor.</summary>
     public void ApplyNetworkState(int carried, int delivered, float energy, float maxEnergy,
         bool knockedOut, float stunSeconds)
@@ -199,25 +212,23 @@ public sealed class OfficePlayerMotor : MonoBehaviour
 
     public bool CaptureAimPoint(out Vector3 worldPoint)
     {
-        if (hasExternalAimPoint)
+        worldPoint = default;
+        Pointer pointer = GetAimPointer();
+        if (aimCamera != null && pointer != null)
         {
-            worldPoint = externalAimPoint;
-            return true;
+            Ray ray = aimCamera.ScreenPointToRay(pointer.position.ReadValue());
+            Plane floor = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
+            if (floor.Raycast(ray, out float distance))
+            {
+                worldPoint = ray.GetPoint(distance);
+                return true;
+            }
         }
 
-        worldPoint = default;
-        Pointer pointer = Mouse.current;
-        if (pointer == null && !touchAimInputMode)
-            pointer = Pointer.current;
-        if (aimCamera == null || pointer == null)
+        if (!hasExternalAimPoint)
             return false;
 
-        Ray ray = aimCamera.ScreenPointToRay(pointer.position.ReadValue());
-        Plane floor = new Plane(Vector3.up, new Vector3(0f, transform.position.y, 0f));
-        if (!floor.Raycast(ray, out float distance))
-            return false;
-
-        worldPoint = ray.GetPoint(distance);
+        worldPoint = externalAimPoint;
         return true;
     }
 
@@ -282,21 +293,7 @@ public sealed class OfficePlayerMotor : MonoBehaviour
 
     public bool TryGetAimDirection(out Vector3 direction)
     {
-        if (hasExternalAimPoint)
-        {
-            direction = externalAimPoint - transform.position;
-            direction.y = 0f;
-            if (direction.sqrMagnitude > 0.001f)
-            {
-                direction.Normalize();
-                return true;
-            }
-        }
-
-        Pointer pointer = Mouse.current;
-        if (pointer == null && !touchAimInputMode)
-            pointer = Pointer.current;
-
+        Pointer pointer = GetAimPointer();
         if (aimCamera != null && pointer != null)
         {
             Ray ray = aimCamera.ScreenPointToRay(pointer.position.ReadValue());
@@ -310,6 +307,17 @@ public sealed class OfficePlayerMotor : MonoBehaviour
                     direction.Normalize();
                     return true;
                 }
+            }
+        }
+
+        if (hasExternalAimPoint)
+        {
+            direction = externalAimPoint - transform.position;
+            direction.y = 0f;
+            if (direction.sqrMagnitude > 0.001f)
+            {
+                direction.Normalize();
+                return true;
             }
         }
 
