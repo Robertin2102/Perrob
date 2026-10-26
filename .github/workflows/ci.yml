@@ -23,6 +23,18 @@ jobs:
         with:
           lfs: true
 
+      - name: Free disk space for Unity
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+
+      - name: Check available disk space
+        run: df -h
+
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
