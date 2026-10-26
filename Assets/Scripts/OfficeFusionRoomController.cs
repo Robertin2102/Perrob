@@ -160,14 +160,17 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
             string.IsNullOrEmpty(currentMatchId))
             return;
 
-        string token = string.IsNullOrWhiteSpace(matchIngestToken)
-            ? Environment.GetEnvironmentVariable("PERROB_MATCH_INGEST_TOKEN")
-            : matchIngestToken.Trim();
+        string token = ResolveMatchIngestToken();
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // The downloadable WebGL build must not contain a private bearer token.
+        token = string.Empty;
+#else
         if (string.IsNullOrWhiteSpace(token))
         {
             Debug.LogWarning("No se enviará la partida: configura Match Ingest Token en OfficeFusionRoomController.", this);
             return;
         }
+#endif
 
         DateTime endedAt = DateTime.UtcNow;
         float duration = (float)(endedAt - currentMatchStartedAt).TotalSeconds;
@@ -188,6 +191,18 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
         };
         matchReportStarted = true;
         StartCoroutine(SendMatchReport(JsonUtility.ToJson(report), token, currentMatchId));
+    }
+
+    private string ResolveMatchIngestToken()
+    {
+        if (!string.IsNullOrWhiteSpace(matchIngestToken))
+            return matchIngestToken.Trim();
+
+        string environmentToken = Environment.GetEnvironmentVariable("PERROB_MATCH_INGEST_TOKEN");
+        if (!string.IsNullOrWhiteSpace(environmentToken))
+            return environmentToken.Trim();
+
+        return string.Empty;
     }
 
     private static MatchPlayerReport MakePlayerReport(OfficeFusionPlayer player, float duration)
@@ -211,7 +226,11 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
 
     private IEnumerator SendMatchReport(string json, string token, string matchId)
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        string url = backendBaseUrl.TrimEnd('/') + "/api/matches/web";
+#else
         string url = backendBaseUrl.TrimEnd('/') + "/api/matches";
+#endif
         byte[] body = Encoding.UTF8.GetBytes(json);
         for (int attempt = 1; attempt <= 3; attempt++)
         {
@@ -220,7 +239,8 @@ public sealed class OfficeFusionRoomController : MonoBehaviour, INetworkRunnerCa
                 request.uploadHandler = new UploadHandlerRaw(body);
                 request.downloadHandler = new DownloadHandlerBuffer();
                 request.SetRequestHeader("Content-Type", "application/json");
-                request.SetRequestHeader("Authorization", "Bearer " + token);
+                if (!string.IsNullOrWhiteSpace(token))
+                    request.SetRequestHeader("Authorization", "Bearer " + token);
                 request.timeout = 90;
                 yield return request.SendWebRequest();
 
